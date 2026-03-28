@@ -429,8 +429,25 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                 except Exception as e:
                     logger.error(f"Step 2 failed: {e}")
+
+                    # Capture screenshot even on failure
+                    try:
+                        screenshot_step2_error = driver.get_screenshot_as_png()
+                        error_url = driver.current_url
+                        logger.info(f"Step 2 error screenshot captured. URL: {error_url}")
+                    except:
+                        screenshot_step2_error = None
+                        error_url = "N/A"
+
                     result['step2_complete'] = False
-                    result['screenshot_step2'] = None
+                    result['screenshot_step2'] = screenshot_step2_error
+                    result['step2_current_url'] = error_url
+                    result['step2_instagram_clicked'] = False
+                    result['step2_login_button_clicked'] = False
+                    result['step2_popup_url'] = None
+                    result['step2_popup_url_after_login'] = None
+                    result['step2_main_url_after_login'] = None
+                    result['step2_new_tab_info'] = {'new_tab_opened': False, 'total_windows': 1}
 
             return result
 
