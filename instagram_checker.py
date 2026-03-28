@@ -147,7 +147,11 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
         if update_callback:
             await update_callback(1, "Loading Instagram...")
         driver.get('https://www.instagram.com/')
-        time.sleep(0.3)
+
+        # Wait for initial page load
+        WebDriverWait(driver, 5).until(
+            lambda d: d.execute_script('return document.readyState') == 'complete'
+        )
 
         # Parse and add cookies
         cookies = parse_cookie_string(cookie_string)
@@ -162,7 +166,11 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
         if update_callback:
             await update_callback(1, "Applying cookies...")
         driver.refresh()
-        time.sleep(0.5)
+
+        # Wait for page to reload with cookies
+        WebDriverWait(driver, 5).until(
+            lambda d: d.execute_script('return document.readyState') == 'complete'
+        )
 
         # Check if logged in by looking for specific elements
         try:
@@ -254,8 +262,10 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                     logger.info("Navigating to Facebook Business Manager...")
                     driver.get('https://business.facebook.com/latest/home?locale=en_US')
 
-                    # Wait for page to fully load (minimized)
-                    time.sleep(1)
+                    # Wait for page to fully load
+                    WebDriverWait(driver, 10).until(
+                        lambda d: d.execute_script('return document.readyState') == 'complete'
+                    )
 
                     # Inject anti-detection scripts and force English language
                     driver.execute_script("""
@@ -276,11 +286,8 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         if update_callback:
                             await update_callback(2, "Looking for Instagram login...")
 
-                        # Wait for the login page to appear
-                        WebDriverWait(driver, 8).until(
-                            lambda d: d.execute_script('return document.readyState') == 'complete'
-                        )
-                        time.sleep(2)
+                        # Wait for any dynamic content to load (give it a moment for elements to appear)
+                        time.sleep(1.5)
 
                         # Look for Instagram login button - try multiple selectors
                         instagram_login_clicked = False
@@ -344,19 +351,92 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                 await update_callback(2, "Logging in with Instagram...")
                             logger.info("Instagram login button clicked! Waiting for OAuth flow...")
 
-                            # Wait for potential Instagram OAuth redirect
-                            time.sleep(3)
+                            # Wait for page to load after click
+                            WebDriverWait(driver, 10).until(
+                                lambda d: d.execute_script('return document.readyState') == 'complete'
+                            )
+                            time.sleep(1.5)
+
+                            # Check if we're on Instagram OAuth confirmation page
+                            current_url = driver.current_url
+                            logger.info(f"Current URL after Instagram login click: {current_url}")
+
+                            # Look for "Log in as [username]" confirmation button
+                            if 'instagram.com/oauth' in current_url or 'instagram.com/accounts' in current_url:
+                                logger.info("Detected Instagram OAuth page - looking for confirmation button...")
+                                try:
+                                    # Try to find and click the "Log in as" button with various methods
+                                    login_confirmed = False
+
+                                    # Method 1: Look for button/link with "Log in as" text
+                                    try:
+                                        confirm_buttons = driver.find_elements(By.XPATH,
+                                            "//button[contains(., 'Log in as')] | //a[contains(., 'Log in as')] | "
+                                            "//div[@role='button' and contains(., 'Log in as')]"
+                                        )
+                                        for btn in confirm_buttons:
+                                            try:
+                                                driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", btn)
+                                                time.sleep(0.3)
+                                                driver.execute_script("arguments[0].click();", btn)
+                                                login_confirmed = True
+                                                logger.info(f"Clicked 'Log in as' confirmation button: {btn.text}")
+                                                break
+                                            except:
+                                                continue
+                                    except Exception as e:
+                                        logger.warning(f"Method 1 for confirmation button failed: {e}")
+
+                                    # Method 2: Look for primary action button
+                                    if not login_confirmed:
+                                        try:
+                                            primary_buttons = driver.find_elements(By.CSS_SELECTOR,
+                                                "button[type='submit'], button._acan, button._acas, a[role='button']"
+                                            )
+                                            for btn in primary_buttons:
+                                                text = btn.text.lower()
+                                                if 'log in' in text or 'continue' in text or 'confirm' in text:
+                                                    try:
+                                                        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", btn)
+                                                        time.sleep(0.3)
+                                                        driver.execute_script("arguments[0].click();", btn)
+                                                        login_confirmed = True
+                                                        logger.info(f"Clicked confirmation button via CSS selector: {btn.text}")
+                                                        break
+                                                    except:
+                                                        continue
+                                        except Exception as e:
+                                            logger.warning(f"Method 2 for confirmation button failed: {e}")
+
+                                    if login_confirmed:
+                                        logger.info("Confirmation button clicked - waiting for redirect...")
+                                        if update_callback:
+                                            await update_callback(2, "Confirming login...")
+                                    else:
+                                        logger.warning("No confirmation button found - may auto-redirect")
+
+                                except Exception as e:
+                                    logger.warning(f"Error looking for confirmation button: {e}")
+
+                            # Wait for redirect back to Business Manager
+                            logger.info("Waiting for redirect to Business Manager...")
+                            try:
+                                # Wait up to 15 seconds for redirect to business.facebook.com
+                                WebDriverWait(driver, 15).until(
+                                    lambda d: 'business.facebook.com' in d.current_url
+                                )
+                                logger.info("Successfully redirected to Business Manager")
+                            except TimeoutException:
+                                logger.warning("Timeout waiting for redirect to Business Manager")
 
                             # Wait for page to complete loading
                             WebDriverWait(driver, 10).until(
                                 lambda d: d.execute_script('return document.readyState') == 'complete'
                             )
-
-                            # Additional wait for redirect completion
-                            time.sleep(2)
+                            time.sleep(1)
 
                             current_url = driver.current_url
-                            logger.info(f"Current URL after Instagram login: {current_url}")
+                            logger.info(f"Final URL after OAuth: {current_url}")
 
                             # Verify we're in business.facebook.com and not on login page
                             if 'business.facebook.com' in current_url and 'login' not in current_url.lower():
@@ -386,8 +466,10 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         logger.info("Navigating to Facebook Ad Center...")
                         driver.get('https://business.facebook.com/latest/ad_center/ads_summary?locale=en_US')
 
-                        # Wait for initial page load
-                        time.sleep(3)
+                        # Wait for page to be fully loaded
+                        WebDriverWait(driver, 10).until(
+                            lambda d: d.execute_script('return document.readyState') == 'complete'
+                        )
 
                         # Force English language again
                         driver.execute_script("""
@@ -402,13 +484,8 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         if update_callback:
                             await update_callback(3, "Loading Ad Center data...")
 
-                        # Wait for page to be fully loaded
-                        WebDriverWait(driver, 10).until(
-                            lambda d: d.execute_script('return document.readyState') == 'complete'
-                        )
-
-                        # Additional wait for dynamic content to load
-                        time.sleep(3)
+                        # Wait for dynamic content to load (minimal wait)
+                        time.sleep(2)
 
                         current_url = driver.current_url
                         logger.info(f"Current URL at Step 3: {current_url}")
@@ -423,24 +500,28 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                 for element in elements:
                                     if 'instagram' in element.text.lower():
                                         driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
-                                        time.sleep(0.5)
+                                        time.sleep(0.3)
                                         driver.execute_script("arguments[0].click();", element)
                                         logger.info("Clicked Instagram login in Step 3")
 
-                                        # Wait for OAuth and redirect
-                                        time.sleep(5)
+                                        # Wait for redirect to business.facebook.com
+                                        try:
+                                            WebDriverWait(driver, 15).until(
+                                                lambda d: 'business.facebook.com' in d.current_url and 'login' not in d.current_url.lower()
+                                            )
+                                        except TimeoutException:
+                                            logger.warning("Timeout waiting for redirect")
+
                                         WebDriverWait(driver, 10).until(
                                             lambda d: d.execute_script('return document.readyState') == 'complete'
                                         )
-                                        time.sleep(2)
 
                                         # Try navigating to Ad Center again
                                         driver.get('https://business.facebook.com/latest/ad_center/ads_summary?locale=en_US')
-                                        time.sleep(3)
                                         WebDriverWait(driver, 10).until(
                                             lambda d: d.execute_script('return document.readyState') == 'complete'
                                         )
-                                        time.sleep(2)
+                                        time.sleep(1.5)
                                         break
                             except Exception as e:
                                 logger.warning(f"Failed to re-click Instagram login: {e}")
@@ -448,8 +529,8 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         if update_callback:
                             await update_callback(3, "Capturing screenshot...")
 
-                        # Wait additional time before screenshot to ensure page is fully rendered
-                        time.sleep(3)
+                        # Wait for page content to be fully rendered
+                        time.sleep(2)
 
                         # Take screenshot for Step 3
                         screenshot_step3 = driver.get_screenshot_as_png()
