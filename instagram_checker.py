@@ -76,6 +76,13 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
         user_agent = random.choice(USER_AGENTS)
         chrome_options.add_argument(f'user-agent={user_agent}')
 
+        # Force English language
+        chrome_options.add_argument('--lang=en-US')
+        chrome_options.add_experimental_option('prefs', {
+            'intl.accept_languages': 'en-US,en',
+            'intl.selected_languages': 'en-US,en'
+        })
+
         chrome_options.add_argument('--window-size=1920,1080')
         chrome_options.add_argument('--disable-software-rasterizer')
         chrome_options.add_argument('--disable-extensions')
