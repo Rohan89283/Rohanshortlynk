@@ -157,7 +157,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
         driver.get('https://www.instagram.com/')
 
         # Wait for initial page load
-        WebDriverWait(driver, 3).until(
+        WebDriverWait(driver, 2).until(
             lambda d: d.execute_script('return document.readyState') == 'complete'
         )
 
@@ -178,7 +178,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
         # Check if logged in by looking for specific elements
         try:
             # Wait for page to load (minimal timeout)
-            WebDriverWait(driver, 2).until(
+            WebDriverWait(driver, 1.5).until(
                 lambda d: d.execute_script('return document.readyState') == 'complete'
             )
 
@@ -292,7 +292,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                     # Wait for page to load and detect login buttons
                     logger.info("Waiting for page to load completely...")
-                    WebDriverWait(driver, 4).until(
+                    WebDriverWait(driver, 3).until(
                         lambda d: d.execute_script('return document.readyState') == 'complete'
                     )
                     logger.info("✓ Page loaded")
@@ -350,7 +350,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                             for selector in possible_selectors:
                                 try:
-                                    instagram_button = WebDriverWait(driver, 3).until(
+                                    instagram_button = WebDriverWait(driver, 2).until(
                                         EC.element_to_be_clickable((By.XPATH, selector))
                                     )
                                     logger.info(f"Found Instagram login button using selector: {selector}")
@@ -440,7 +440,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                                                 for selector in login_as_selectors:
                                                     try:
-                                                        login_as_button = WebDriverWait(driver, 1.5).until(
+                                                        login_as_button = WebDriverWait(driver, 1).until(
                                                             EC.element_to_be_clickable((By.XPATH, selector))
                                                         )
                                                         logger.info(f"Found 'Log in as' button using selector: {selector}")
