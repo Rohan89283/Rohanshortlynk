@@ -227,10 +227,6 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
             else:
                 location = "Direct Connection"
 
-            # Take screenshot for Step 1
-            screenshot_step1 = driver.get_screenshot_as_png()
-            logger.info("Step 1 screenshot captured")
-
             # Update proxy success
             if proxy_manager and active_proxy:
                 proxy_manager.update_proxy_usage(active_proxy['id'], True)
@@ -239,7 +235,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
             result = {
                 'valid': is_logged_in,
-                'screenshot': screenshot_step1,
+                'screenshot': None,  # Will capture at end of Step 1
                 'message': message,
                 'url': current_url,
                 'proxy_used': proxy_used,
@@ -251,6 +247,11 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
             # Login check complete
             if is_logged_in:
+                # Take screenshot at END of Step 1
+                screenshot_step1 = driver.get_screenshot_as_png()
+                result['screenshot'] = screenshot_step1
+                logger.info("✓ Step 1 screenshot captured (Instagram logged in)")
+
                 logger.info("=" * 80)
                 logger.info("STEP 1: COMPLETED - Instagram login successful!")
                 logger.info("=" * 80)
@@ -296,13 +297,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         if update_callback:
                             await update_callback(2, "Already on Business home page!")
 
-                        # Take screenshot of business home
-                        screenshot_step2_main = driver.get_screenshot_as_png()
-                        logger.info("Step 2 business home screenshot captured")
-
                         # Set all step 2 variables for direct flow
-                        screenshot_step2_popup = None
-                        screenshot_step2_after_login = None
                         popup_url = None
                         popup_url_after_login = None
                         main_url_after_login = current_page_url
@@ -371,8 +366,6 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         current_url = driver.current_url
                         logger.info(f"Current URL after click: {current_url}")
 
-                        screenshot_step2_popup = None
-                        screenshot_step2_after_login = None
                         popup_url = None
                         popup_url_after_login = None
                         main_url_after_login = None
@@ -394,13 +387,6 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                         driver.switch_to.window(window_handle)
                                         popup_url = driver.current_url
                                         logger.info(f"Switched to popup window. URL: {popup_url}")
-
-                                        # Take screenshot immediately (popup may close quickly)
-                                        try:
-                                            screenshot_step2_popup = driver.get_screenshot_as_png()
-                                            logger.info("✓ Popup screenshot captured")
-                                        except Exception as ss_error:
-                                            logger.warning(f"Failed to capture popup screenshot: {ss_error}")
 
                                         # Check if popup is a callback URL (auto-closes)
                                         if '/callback/' in popup_url or '/idtoken/' in popup_url:
@@ -445,14 +431,6 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                             except Exception as e:
                                                 logger.info(f"No login button needed: {e}")
 
-                                            # Try to capture screenshot after action
-                                            try:
-                                                popup_url_after_login = driver.current_url
-                                                screenshot_step2_after_login = driver.get_screenshot_as_png()
-                                                logger.info(f"Popup URL after action: {popup_url_after_login}")
-                                            except Exception as e:
-                                                logger.info(f"Popup already closed: {e}")
-
                                     except Exception as popup_error:
                                         logger.info(f"Popup handling completed or closed: {popup_error}")
 
@@ -491,10 +469,6 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                             if 'business.facebook.com/latest' in main_url_after_login or 'business.facebook.com/?nav' in main_url_after_login:
                                 logger.info("✓ Already on Business home page!")
 
-                        # Take screenshot of main window (current state)
-                        screenshot_step2_main = driver.get_screenshot_as_png()
-                        logger.info("Step 2 main window screenshot captured")
-
                     # Final check: Verify we're on business home page
                     final_url = driver.current_url
                     logger.info(f"Final URL: {final_url}")
@@ -513,6 +487,10 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                     else:
                         logger.info(f"⚠️ Not yet on Business home page. Current: {final_url}")
 
+                    # Take screenshot at END of Step 2 (final destination)
+                    screenshot_step2 = driver.get_screenshot_as_png()
+                    logger.info("✓ Step 2 screenshot captured (Business Suite final page)")
+
                     logger.info("=" * 80)
                     logger.info("STEP 2: COMPLETED - Meta Business Suite check done!")
                     logger.info(f"Flow type: {new_tab_info.get('flow_type', 'unknown')}")
@@ -520,36 +498,27 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                     logger.info("=" * 80)
 
                     # Update result with step 2 data
-                    result['screenshot_step2'] = screenshot_step2_main
-                    result['screenshot_step2_popup'] = screenshot_step2_popup
-                    result['screenshot_step2_after_login'] = screenshot_step2_after_login
+                    result['screenshot_step2'] = screenshot_step2
                     result['step2_complete'] = True
                     result['step2_instagram_clicked'] = instagram_login_clicked
                     result['step2_login_button_clicked'] = login_button_clicked
-                    result['step2_current_url'] = current_url
+                    result['step2_current_url'] = final_url
                     result['step2_popup_url'] = popup_url
-                    result['step2_popup_url_after_login'] = popup_url_after_login
-                    result['step2_main_url_after_login'] = main_url_after_login
                     result['step2_new_tab_info'] = new_tab_info
+                    result['step2_on_business_home'] = on_business_home
 
                 except Exception as e:
                     logger.error(f"Step 2 failed: {e}", exc_info=True)
 
-                    # Capture screenshot even on failure - this is critical for debugging
+                    # Capture screenshot even on failure
                     screenshot_step2_error = None
                     error_url = "N/A"
                     try:
                         screenshot_step2_error = driver.get_screenshot_as_png()
                         error_url = driver.current_url
-                        logger.info(f"✓ Step 2 error screenshot captured successfully. URL: {error_url}")
+                        logger.info(f"✓ Step 2 error screenshot captured. URL: {error_url}")
                     except Exception as screenshot_error:
                         logger.error(f"✗ Failed to capture Step 2 error screenshot: {screenshot_error}")
-
-                    # Ensure screenshot exists
-                    if screenshot_step2_error:
-                        logger.info("Step 2 screenshot available to send")
-                    else:
-                        logger.warning("Step 2 screenshot is None - will not be sent")
 
                     result['step2_complete'] = False
                     result['screenshot_step2'] = screenshot_step2_error
@@ -558,9 +527,8 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                     result['step2_instagram_clicked'] = False
                     result['step2_login_button_clicked'] = False
                     result['step2_popup_url'] = None
-                    result['step2_popup_url_after_login'] = None
-                    result['step2_main_url_after_login'] = None
                     result['step2_new_tab_info'] = {'new_tab_opened': False, 'total_windows': 1}
+                    result['step2_on_business_home'] = False
 
             return result
 
