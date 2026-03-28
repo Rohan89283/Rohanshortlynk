@@ -137,6 +137,19 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 caption=f"📸 Step 1 - Instagram Login"
             )
 
+        if result.get('screenshot_step2_before'):
+            method_used = result.get('step2_method', 'Unknown')
+            await update.message.reply_photo(
+                photo=BytesIO(result['screenshot_step2_before']),
+                caption=f"📸 Step 2 (Before) - Meta Business Login Page\n🔧 Method: {method_used}"
+            )
+
+        if result.get('screenshot_step2_after_click'):
+            await update.message.reply_photo(
+                photo=BytesIO(result['screenshot_step2_after_click']),
+                caption=f"📸 Step 2 (After Click) - Page after clicking Instagram login"
+            )
+
         if result.get('screenshot_oauth'):
             await update.message.reply_photo(
                 photo=BytesIO(result['screenshot_oauth']),
@@ -146,7 +159,7 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if result.get('screenshot_step2'):
             await update.message.reply_photo(
                 photo=BytesIO(result['screenshot_step2']),
-                caption=f"📸 Step 2 - Meta Business Home"
+                caption=f"📸 Step 2 (Final) - Meta Business Home"
             )
 
         if result.get('screenshot_step3'):
