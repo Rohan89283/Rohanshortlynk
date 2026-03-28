@@ -2,6 +2,8 @@ import os
 import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
+from supabase import create_client, Client
+from datetime import datetime
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -9,10 +11,56 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+supabase_url = os.getenv('VITE_SUPABASE_URL')
+supabase_key = os.getenv('VITE_SUPABASE_SUPABASE_ANON_KEY')
+supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
+
+async def log_activity(update: Update, command: str):
+    if not supabase:
+        return
+
+    try:
+        user = update.effective_user
+        supabase.table('bot_activity').insert({
+            'user_id': user.id,
+            'username': user.username,
+            'command': command,
+            'message_text': update.message.text
+        }).execute()
+    except Exception as e:
+        logger.error(f"Failed to log activity: {e}")
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await log_activity(update, '/start')
     await update.message.reply_text(
-        "👋 Hello! I'm your bot. Use commands to interact with me."
+        "👋 Hello! I'm your bot.\n\n"
+        "Use /cmds to see all available commands\n"
+        "Use /help to learn how to use each command"
     )
+
+async def cmds(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await log_activity(update, '/cmds')
+    commands_list = (
+        "📋 *Available Commands:*\n\n"
+        "/start - Start the bot and see welcome message\n"
+        "/cmds - Show all available commands\n"
+        "/help - Get detailed help for each command\n"
+    )
+    await update.message.reply_text(commands_list, parse_mode='Markdown')
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await log_activity(update, '/help')
+    help_text = (
+        "📖 *How to Use Each Command:*\n\n"
+        "**/start**\n"
+        "Simply type /start to initialize the bot and see the welcome message.\n\n"
+        "**/cmds**\n"
+        "Type /cmds to get a quick list of all available commands and their basic descriptions.\n\n"
+        "**/help**\n"
+        "Type /help (this command) to get detailed instructions on how to use each command.\n\n"
+        "More commands coming soon!"
+    )
+    await update.message.reply_text(help_text, parse_mode='Markdown')
 
 def main():
     bot_token = os.getenv('BOT_TOKEN')
@@ -23,6 +71,8 @@ def main():
     application = Application.builder().token(bot_token).build()
 
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("cmds", cmds))
+    application.add_handler(CommandHandler("help", help_command))
 
     logger.info("Bot started successfully")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
