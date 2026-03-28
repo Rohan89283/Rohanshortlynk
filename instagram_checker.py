@@ -319,45 +319,97 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         instagram_login_clicked = False
                         successful_method = None
 
-                        # METHOD 1: Exact text "Log in with Instagram"
-                        logger.info("METHOD 1: Searching for exact text 'Log in with Instagram'...")
+                        # Helper function to strictly filter Instagram login elements (NOT Facebook)
+                        def is_instagram_login_only(text, aria_label=None):
+                            """Check if this is Instagram login button and NOT Facebook"""
+                            if not text and not aria_label:
+                                return False
+
+                            combined_text = f"{text or ''} {aria_label or ''}".lower()
+
+                            # MUST contain "instagram"
+                            if 'instagram' not in combined_text:
+                                return False
+
+                            # MUST NOT contain "facebook" or "fb"
+                            if 'facebook' in combined_text or ' fb ' in combined_text:
+                                logger.info(f"  ❌ REJECTED (contains Facebook/FB): '{text}'")
+                                return False
+
+                            # Should contain login-related words
+                            has_login = any(word in combined_text for word in ['log in', 'login', 'sign in', 'signin'])
+
+                            if has_login:
+                                logger.info(f"  ✅ ACCEPTED: '{text}'")
+                                return True
+
+                            return False
+
+                        # METHOD 1: Exact text "Log in with Instagram" (HIGHEST PRIORITY)
+                        logger.info("METHOD 1: Searching for EXACT text 'Log in with Instagram'...")
                         try:
                             elements = driver.find_elements(By.XPATH,
-                                "//*[normalize-space(text())='Log in with Instagram'] | "
-                                "//*[contains(normalize-space(text()), 'Log in with Instagram')]"
+                                "//*[normalize-space(text())='Log in with Instagram']"
                             )
-                            logger.info(f"Found {len(elements)} elements with exact text")
+                            logger.info(f"Found {len(elements)} elements with EXACT text")
                             for idx, elem in enumerate(elements):
                                 try:
                                     if elem.is_displayed():
-                                        instagram_elements.append(('METHOD1', idx, elem, elem.text))
-                                        logger.info(f"  Element {idx}: visible=True, text='{elem.text}'")
+                                        text = elem.text
+                                        if is_instagram_login_only(text):
+                                            # Prioritize this by adding it first
+                                            instagram_elements.insert(0, ('METHOD1-EXACT', idx, elem, text))
+                                            logger.info(f"  🎯 PRIORITY Element {idx}: text='{text}'")
                                 except:
                                     pass
                         except Exception as e:
                             logger.warning(f"METHOD 1 search failed: {e}")
 
-                        # METHOD 2: Contains "Instagram" in buttons/links
-                        logger.info("METHOD 2: Searching for buttons/links containing 'Instagram'...")
+                        # METHOD 2: Contains "Log in with Instagram" (partial match)
+                        logger.info("METHOD 2: Searching for text containing 'Log in with Instagram'...")
                         try:
                             elements = driver.find_elements(By.XPATH,
-                                "//button[contains(translate(., 'INSTAGRAM', 'instagram'), 'instagram')] | "
-                                "//a[contains(translate(., 'INSTAGRAM', 'instagram'), 'instagram')] | "
-                                "//div[@role='button' and contains(translate(., 'INSTAGRAM', 'instagram'), 'instagram')]"
+                                "//*[contains(normalize-space(text()), 'Log in with Instagram')]"
                             )
-                            logger.info(f"Found {len(elements)} clickable elements with Instagram")
+                            logger.info(f"Found {len(elements)} elements with partial match")
                             for idx, elem in enumerate(elements):
                                 try:
                                     if elem.is_displayed():
-                                        instagram_elements.append(('METHOD2', idx, elem, elem.text))
-                                        logger.info(f"  Element {idx}: visible=True, text='{elem.text}'")
+                                        text = elem.text
+                                        if is_instagram_login_only(text):
+                                            instagram_elements.append(('METHOD2-CONTAINS', idx, elem, text))
+                                            logger.info(f"  ✅ Element {idx}: text='{text}'")
                                 except:
                                     pass
                         except Exception as e:
                             logger.warning(f"METHOD 2 search failed: {e}")
 
-                        # METHOD 3: aria-label containing Instagram
-                        logger.info("METHOD 3: Searching for aria-label containing 'Instagram'...")
+                        # METHOD 3: Buttons/links with "Instagram" AND "log in" (NO Facebook)
+                        logger.info("METHOD 3: Searching for Instagram login buttons (strict filter)...")
+                        try:
+                            elements = driver.find_elements(By.XPATH,
+                                "//button[contains(translate(., 'INSTAGRAM', 'instagram'), 'instagram') and "
+                                "contains(translate(., 'LOG IN', 'log in'), 'log in')] | "
+                                "//a[contains(translate(., 'INSTAGRAM', 'instagram'), 'instagram') and "
+                                "contains(translate(., 'LOG IN', 'log in'), 'log in')] | "
+                                "//div[@role='button' and contains(translate(., 'INSTAGRAM', 'instagram'), 'instagram') and "
+                                "contains(translate(., 'LOG IN', 'log in'), 'log in')]"
+                            )
+                            logger.info(f"Found {len(elements)} Instagram + Login elements")
+                            for idx, elem in enumerate(elements):
+                                try:
+                                    if elem.is_displayed():
+                                        text = elem.text
+                                        # Strict filter - MUST pass
+                                        if is_instagram_login_only(text):
+                                            instagram_elements.append(('METHOD3-STRICT', idx, elem, text))
+                                except:
+                                    pass
+                        except Exception as e:
+                            logger.warning(f"METHOD 3 search failed: {e}")
+
+                        # METHOD 4: aria-label with "Instagram" (NO Facebook)
+                        logger.info("METHOD 4: Searching for aria-label with Instagram...")
                         try:
                             elements = driver.find_elements(By.XPATH,
                                 "//*[contains(translate(@aria-label, 'INSTAGRAM', 'instagram'), 'instagram')]"
@@ -367,60 +419,54 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                 try:
                                     if elem.is_displayed():
                                         aria_label = elem.get_attribute('aria-label')
-                                        instagram_elements.append(('METHOD3', idx, elem, elem.text or aria_label))
-                                        logger.info(f"  Element {idx}: visible=True, text='{elem.text}', aria-label='{aria_label}'")
-                                except:
-                                    pass
-                        except Exception as e:
-                            logger.warning(f"METHOD 3 search failed: {e}")
-
-                        # METHOD 4: All clickable elements (brute force)
-                        logger.info("METHOD 4: Checking ALL clickable elements...")
-                        try:
-                            elements = driver.find_elements(By.CSS_SELECTOR,
-                                "a, button, div[role='button'], span[role='button'], input[type='button'], input[type='submit']"
-                            )
-                            logger.info(f"Found {len(elements)} total clickable elements")
-                            found_count = 0
-                            for idx, elem in enumerate(elements):
-                                try:
-                                    text = elem.text.lower()
-                                    if 'instagram' in text and elem.is_displayed():
-                                        instagram_elements.append(('METHOD4', idx, elem, elem.text))
-                                        logger.info(f"  Element {idx}: visible=True, text='{elem.text}'")
-                                        found_count += 1
-                                        if found_count >= 5:  # Limit to first 5 to avoid spam
-                                            logger.info(f"  ... (showing first 5 of potentially more)")
-                                            break
+                                        text = elem.text
+                                        if is_instagram_login_only(text, aria_label):
+                                            instagram_elements.append(('METHOD4-ARIA', idx, elem, text or aria_label))
                                 except:
                                     pass
                         except Exception as e:
                             logger.warning(f"METHOD 4 search failed: {e}")
 
-                        logger.info(f"\nTotal Instagram-related elements found: {len(instagram_elements)}")
+                        # Log all found elements with their text
+                        logger.info(f"\n📊 Total FILTERED Instagram login elements: {len(instagram_elements)}")
+                        for method, idx, elem, text in instagram_elements:
+                            logger.info(f"  - {method}[{idx}]: '{text}'")
 
                         # Now try clicking each element with DIFFERENT click methods
                         for method_name, idx, element, text in instagram_elements:
                             if instagram_login_clicked:
                                 break
 
-                            logger.info(f"\nAttempting to click: {method_name}[{idx}] - '{text}'")
+                            logger.info(f"\n{'='*60}")
+                            logger.info(f"Attempting: {method_name}[{idx}] - '{text}'")
+                            logger.info(f"{'='*60}")
 
                             # CLICK TECHNIQUE 1: JavaScript click
                             try:
-                                logger.info("  CLICK TECHNIQUE 1: JavaScript click...")
+                                logger.info("  🖱️  TECHNIQUE 1: JavaScript click")
                                 driver.execute_script("arguments[0].scrollIntoView({behavior: 'auto', block: 'center'});", element)
-                                time.sleep(0.3)
+                                time.sleep(0.5)
                                 old_url = driver.current_url
-                                driver.execute_script("arguments[0].click();", element)
-                                time.sleep(1.5)
-                                new_url = driver.current_url
+                                logger.info(f"  URL before click: {old_url}")
 
+                                driver.execute_script("arguments[0].click();", element)
+                                time.sleep(2)
+
+                                new_url = driver.current_url
+                                logger.info(f"  URL after click: {new_url}")
+
+                                # Check if URL changed AND it's Instagram related
                                 if old_url != new_url:
-                                    logger.info(f"  ✅ SUCCESS! URL changed: {old_url} -> {new_url}")
-                                    instagram_login_clicked = True
-                                    successful_method = f"{method_name}[{idx}] + JS_CLICK"
-                                    break
+                                    if 'instagram.com' in new_url or 'facebook.com/login' not in new_url:
+                                        logger.info(f"  ✅ SUCCESS! URL changed to: {new_url}")
+                                        instagram_login_clicked = True
+                                        successful_method = f"{method_name}[{idx}] + JS_CLICK"
+                                        break
+                                    else:
+                                        logger.warning(f"  ⚠️  URL changed but to wrong page: {new_url}")
+                                        # Go back
+                                        driver.back()
+                                        time.sleep(1)
                                 else:
                                     logger.info(f"  ❌ No URL change")
                             except Exception as e:
@@ -429,19 +475,28 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                             # CLICK TECHNIQUE 2: Selenium native click
                             if not instagram_login_clicked:
                                 try:
-                                    logger.info("  CLICK TECHNIQUE 2: Selenium native click...")
+                                    logger.info("  🖱️  TECHNIQUE 2: Selenium native click")
                                     driver.execute_script("arguments[0].scrollIntoView({behavior: 'auto', block: 'center'});", element)
-                                    time.sleep(0.3)
+                                    time.sleep(0.5)
                                     old_url = driver.current_url
+                                    logger.info(f"  URL before click: {old_url}")
+
                                     element.click()
-                                    time.sleep(1.5)
+                                    time.sleep(2)
+
                                     new_url = driver.current_url
+                                    logger.info(f"  URL after click: {new_url}")
 
                                     if old_url != new_url:
-                                        logger.info(f"  ✅ SUCCESS! URL changed: {old_url} -> {new_url}")
-                                        instagram_login_clicked = True
-                                        successful_method = f"{method_name}[{idx}] + NATIVE_CLICK"
-                                        break
+                                        if 'instagram.com' in new_url or 'facebook.com/login' not in new_url:
+                                            logger.info(f"  ✅ SUCCESS! URL changed to: {new_url}")
+                                            instagram_login_clicked = True
+                                            successful_method = f"{method_name}[{idx}] + NATIVE_CLICK"
+                                            break
+                                        else:
+                                            logger.warning(f"  ⚠️  URL changed but to wrong page: {new_url}")
+                                            driver.back()
+                                            time.sleep(1)
                                     else:
                                         logger.info(f"  ❌ No URL change")
                                 except Exception as e:
@@ -451,19 +506,28 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                             if not instagram_login_clicked:
                                 try:
                                     from selenium.webdriver.common.action_chains import ActionChains
-                                    logger.info("  CLICK TECHNIQUE 3: ActionChains click...")
+                                    logger.info("  🖱️  TECHNIQUE 3: ActionChains click")
                                     driver.execute_script("arguments[0].scrollIntoView({behavior: 'auto', block: 'center'});", element)
-                                    time.sleep(0.3)
+                                    time.sleep(0.5)
                                     old_url = driver.current_url
+                                    logger.info(f"  URL before click: {old_url}")
+
                                     ActionChains(driver).move_to_element(element).click().perform()
-                                    time.sleep(1.5)
+                                    time.sleep(2)
+
                                     new_url = driver.current_url
+                                    logger.info(f"  URL after click: {new_url}")
 
                                     if old_url != new_url:
-                                        logger.info(f"  ✅ SUCCESS! URL changed: {old_url} -> {new_url}")
-                                        instagram_login_clicked = True
-                                        successful_method = f"{method_name}[{idx}] + ACTION_CLICK"
-                                        break
+                                        if 'instagram.com' in new_url or 'facebook.com/login' not in new_url:
+                                            logger.info(f"  ✅ SUCCESS! URL changed to: {new_url}")
+                                            instagram_login_clicked = True
+                                            successful_method = f"{method_name}[{idx}] + ACTION_CLICK"
+                                            break
+                                        else:
+                                            logger.warning(f"  ⚠️  URL changed but to wrong page: {new_url}")
+                                            driver.back()
+                                            time.sleep(1)
                                     else:
                                         logger.info(f"  ❌ No URL change")
                                 except Exception as e:
@@ -471,8 +535,10 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                         # Log result
                         if instagram_login_clicked:
-                            logger.info(f"\n🎉 INSTAGRAM LOGIN CLICKED SUCCESSFULLY!")
+                            logger.info(f"\n{'='*80}")
+                            logger.info(f"🎉 INSTAGRAM LOGIN CLICKED SUCCESSFULLY!")
                             logger.info(f"🎯 Successful method: {successful_method}")
+                            logger.info(f"{'='*80}")
 
                             if update_callback:
                                 await update_callback(2, "Logging in with Instagram...")
@@ -564,7 +630,9 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                             logger.info(f"Final URL after OAuth flow: {final_url}")
 
                         else:
-                            logger.warning("❌ NO INSTAGRAM LOGIN BUTTON FOUND OR CLICKED")
+                            logger.warning("=" * 80)
+                            logger.warning("❌ NO INSTAGRAM LOGIN BUTTON FOUND OR SUCCESSFULLY CLICKED")
+                            logger.warning("=" * 80)
                             logger.warning("Checking if already logged in...")
 
                             current_url = driver.current_url
@@ -572,6 +640,13 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                 logger.info("✅ Already logged into Business Manager")
                             else:
                                 logger.warning(f"⚠️ Still on login/start page: {current_url}")
+
+                                # Save page source for debugging
+                                try:
+                                    page_text = driver.find_element(By.TAG_NAME, 'body').text
+                                    logger.info(f"Page body text preview: {page_text[:500]}...")
+                                except:
+                                    pass
 
                     except Exception as e:
                         logger.error(f"❌ ERROR in Instagram login flow: {e}")
