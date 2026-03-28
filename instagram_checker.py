@@ -100,7 +100,8 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
             'profile.default_content_setting_values.notifications': 2,
             'webrtc.ip_handling_policy': 'disable_non_proxied_udp',
             'webrtc.multiple_routes_enabled': False,
-            'webrtc.nonproxied_udp_enabled': False
+            'webrtc.nonproxied_udp_enabled': False,
+            'intl.accept_languages': 'en-US,en'
         }
         chrome_options.add_experimental_option('prefs', prefs)
 
@@ -221,6 +222,7 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                 'valid': is_logged_in,
                 'screenshot': screenshot_step1,
                 'screenshot_step2': None,
+                'screenshot_step3': None,
                 'message': message,
                 'url': current_url,
                 'proxy_used': proxy_used,
@@ -228,7 +230,8 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                 'total_posts': total_posts,
                 'location': location,
                 'step1_complete': is_logged_in,
-                'step2_complete': False
+                'step2_complete': False,
+                'step3_complete': False
             }
 
             # If login successful, proceed to Step 2 - Facebook Business Manager
@@ -334,9 +337,43 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
 
                     logger.info("Step 2 completed - Screenshot captured")
 
+                    # Step 3: Navigate to Facebook Ad Center
+                    try:
+                        logger.info("Starting Step 3 - Facebook Ad Center...")
+
+                        # Navigate to Facebook Ad Center
+                        logger.info("Navigating to Facebook Ad Center...")
+                        driver.get('https://business.facebook.com/latest/ad_center/ads_summary')
+
+                        # Wait for page to fully load
+                        time.sleep(8)
+
+                        # Wait for page to be fully loaded
+                        WebDriverWait(driver, 15).until(
+                            lambda d: d.execute_script('return document.readyState') == 'complete'
+                        )
+
+                        # Additional wait for dynamic content
+                        time.sleep(3)
+
+                        logger.info(f"Current URL at Step 3: {driver.current_url}")
+
+                        # Take screenshot for Step 3
+                        screenshot_step3 = driver.get_screenshot_as_png()
+
+                        result['screenshot_step3'] = screenshot_step3
+                        result['step3_complete'] = True
+
+                        logger.info("Step 3 completed - Screenshot captured")
+
+                    except Exception as e:
+                        logger.warning(f"Step 3 failed: {e}")
+                        result['step3_complete'] = False
+
                 except Exception as e:
                     logger.warning(f"Step 2 failed: {e}")
                     result['step2_complete'] = False
+                    result['step3_complete'] = False
 
             return result
 
@@ -352,6 +389,7 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                 'valid': False,
                 'screenshot': screenshot,
                 'screenshot_step2': None,
+                'screenshot_step3': None,
                 'message': "Timeout while checking login status",
                 'url': driver.current_url,
                 'proxy_used': proxy_used,
@@ -359,7 +397,8 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                 'total_posts': 'N/A',
                 'location': location,
                 'step1_complete': False,
-                'step2_complete': False
+                'step2_complete': False,
+                'step3_complete': False
             }
 
     except WebDriverException as e:
@@ -374,6 +413,7 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
             'valid': False,
             'screenshot': None,
             'screenshot_step2': None,
+            'screenshot_step3': None,
             'message': f"Browser error: {str(e)[:100]}",
             'url': None,
             'proxy_used': proxy_used,
@@ -381,7 +421,8 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
             'total_posts': 'N/A',
             'location': location,
             'step1_complete': False,
-            'step2_complete': False
+            'step2_complete': False,
+            'step3_complete': False
         }
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
@@ -395,6 +436,7 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
             'valid': False,
             'screenshot': None,
             'screenshot_step2': None,
+            'screenshot_step3': None,
             'message': f"Error: {str(e)[:100]}",
             'url': None,
             'proxy_used': proxy_used,
@@ -402,7 +444,8 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
             'total_posts': 'N/A',
             'location': location,
             'step1_complete': False,
-            'step2_complete': False
+            'step2_complete': False,
+            'step3_complete': False
         }
     finally:
         if driver:

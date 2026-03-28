@@ -90,9 +90,9 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "━━━━━━━━━━━━━━━━━━━━━━\n"
         "🔍 *INSTAGRAM COOKIE CHECKER*\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "📋 *Step 1:* Login Check ⏳\n"
-        "📋 *Step 2:* Profile Info ⏸️\n"
-        "📋 *Step 3:* Post Count ⏸️\n\n"
+        "📋 *Step 1:* Instagram Login ⏳\n"
+        "📋 *Step 2:* Meta Business Home ⏸️\n"
+        "📋 *Step 3:* Ad Center Summary ⏸️\n\n"
         "⏱️ *Time:* 0s\n"
         "🌐 *Proxy:* Checking...\n"
         "📍 *Location:* N/A\n"
@@ -120,13 +120,16 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         step2_status = "✅" if result.get('step2_complete', False) else "❌"
         step2_text = "Completed" if result.get('step2_complete', False) else "Failed" if result.get('step1_complete', False) else "Pending"
 
+        step3_status = "✅" if result.get('step3_complete', False) else "❌"
+        step3_text = "Completed" if result.get('step3_complete', False) else "Failed" if result.get('step2_complete', False) else "Pending"
+
         final_status = (
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             "🔍 *INSTAGRAM COOKIE CHECKER*\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"📋 *Step 1:* Login Check {step1_status} {step1_text}\n"
-            f"📋 *Step 2:* Profile Info {step2_status} {step2_text}\n"
-            f"📋 *Step 3:* Post Count ⏸️ Pending\n\n"
+            f"📋 *Step 1:* Instagram Login {step1_status} {step1_text}\n"
+            f"📋 *Step 2:* Meta Business Home {step2_status} {step2_text}\n"
+            f"📋 *Step 3:* Ad Center Summary {step3_status} {step3_text}\n\n"
             f"⏱️ *Time:* {elapsed}s\n"
             f"🌐 *Proxy:* {proxy_used}\n"
             f"📍 *Location:* {location}\n"
@@ -144,13 +147,19 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if result['screenshot']:
             await update.message.reply_photo(
                 photo=BytesIO(result['screenshot']),
-                caption=f"📸 Step 1 Screenshot - Login Check"
+                caption=f"📸 Step 1 - Instagram Login"
             )
 
         if result.get('screenshot_step2'):
             await update.message.reply_photo(
                 photo=BytesIO(result['screenshot_step2']),
-                caption=f"📸 Step 2 Screenshot - Facebook Business Manager"
+                caption=f"📸 Step 2 - Meta Business Home"
+            )
+
+        if result.get('screenshot_step3'):
+            await update.message.reply_photo(
+                photo=BytesIO(result['screenshot_step3']),
+                caption=f"📸 Step 3 - Ad Center Summary"
             )
 
     except Exception as e:
@@ -161,9 +170,9 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             "🔍 *INSTAGRAM COOKIE CHECKER*\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            "📋 *Step 1:* Login Check ❌ Error\n"
-            "📋 *Step 2:* Profile Info ⏸️ Pending\n"
-            "📋 *Step 3:* Post Count ⏸️ Pending\n\n"
+            "📋 *Step 1:* Instagram Login ❌ Error\n"
+            "📋 *Step 2:* Meta Business Home ⏸️ Pending\n"
+            "📋 *Step 3:* Ad Center Summary ⏸️ Pending\n\n"
             f"⏱️ *Time:* {elapsed}s\n"
             "🌐 *Proxy:* N/A\n"
             "📍 *Location:* N/A\n"
