@@ -10,16 +10,17 @@ class ProxyValidator:
     """Validate and parse proxy strings in various formats"""
 
     PROXY_PATTERNS = [
-        # Host:Port:Username:Password (supports domains and IPs, password can contain colons)
-        r'^([a-zA-Z0-9.-]+):(\d{1,5}):([^:]+):(.+)$',
-        # Username:Password@Host:Port (password can contain special chars)
-        r'^([^:@]+):(.+)@([a-zA-Z0-9.-]+):(\d{1,5})$',
+        # Host:Port:Username:Password (supports domains, IPs, special chars in password)
+        # This pattern splits on first 3 colons, everything after is password
+        r'^([a-zA-Z0-9._-]+):(\d{1,5}):([^:]+):(.+)$',
+        # Username:Password@Host:Port (password can contain special chars before @)
+        r'^([^:@]+):(.+)@([a-zA-Z0-9._-]+):(\d{1,5})$',
         # Protocol://Username:Password@Host:Port
-        r'^(https?|socks[45])://([^:@]+):(.+)@([a-zA-Z0-9.-]+):(\d{1,5})$',
-        # Host:Port (domain or IP)
-        r'^([a-zA-Z0-9.-]+):(\d{1,5})$',
-        # Protocol://Host:Port
-        r'^(https?|socks[45])://([a-zA-Z0-9.-]+):(\d{1,5})$',
+        r'^(https?|socks[45])://([^:@]+):(.+)@([a-zA-Z0-9._-]+):(\d{1,5})$',
+        # Protocol://Host:Port (no auth)
+        r'^(https?|socks[45])://([a-zA-Z0-9._-]+):(\d{1,5})$',
+        # Host:Port (domain or IP, no auth)
+        r'^([a-zA-Z0-9._-]+):(\d{1,5})$',
     ]
 
     @staticmethod

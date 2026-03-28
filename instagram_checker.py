@@ -1,7 +1,7 @@
 import os
 import time
 import logging
-from seleniumwire import webdriver
+from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -80,28 +80,25 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
         # Add binary location
         chrome_options.binary_location = '/usr/bin/google-chrome'
 
-        # Setup selenium-wire options for proxy
-        seleniumwire_options = {}
-
+        # Add proxy if available
         if proxy_info:
-            from proxy_validator import ProxyValidator
-            proxy_url = ProxyValidator.build_proxy_url(proxy_info)
+            # Check if proxy has authentication
+            if proxy_info.get('username') and proxy_info.get('password'):
+                # Use Chrome extension for authenticated proxy
+                from proxy_auth import create_proxy_auth_extension
+                plugin_file = create_proxy_auth_extension(proxy_info)
+                chrome_options.add_extension(plugin_file)
+                logger.info(f"Chrome configured with authenticated proxy: {proxy_info['host']}:{proxy_info['port']}")
+            else:
+                # Use simple proxy without auth
+                proxy_url = f"{proxy_info['host']}:{proxy_info['port']}"
+                chrome_options.add_argument(f'--proxy-server={proxy_url}')
+                logger.info(f"Chrome configured with proxy: {proxy_url}")
 
-            # Configure selenium-wire proxy
-            seleniumwire_options['proxy'] = {
-                'http': proxy_url,
-                'https': proxy_url,
-                'no_proxy': 'localhost,127.0.0.1'
-            }
-            logger.info(f"Selenium-wire configured with proxy: {proxy_info['host']}:{proxy_info['port']}")
-
-        # Initialize driver with selenium-wire
+        # Initialize driver
         logger.info("Initializing Chrome WebDriver...")
         try:
-            driver = webdriver.Chrome(
-                options=chrome_options,
-                seleniumwire_options=seleniumwire_options if seleniumwire_options else None
-            )
+            driver = webdriver.Chrome(options=chrome_options)
         except Exception as e:
             logger.error(f"Failed to initialize Chrome: {e}")
             return {
