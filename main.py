@@ -2,8 +2,6 @@ import os
 import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
-from supabase import create_client, Client
-from datetime import datetime
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -11,27 +9,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-supabase_url = os.getenv('VITE_SUPABASE_URL')
-supabase_key = os.getenv('VITE_SUPABASE_SUPABASE_ANON_KEY')
-supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
-
-async def log_activity(update: Update, command: str):
-    if not supabase:
-        return
-
-    try:
-        user = update.effective_user
-        supabase.table('bot_activity').insert({
-            'user_id': user.id,
-            'username': user.username,
-            'command': command,
-            'message_text': update.message.text
-        }).execute()
-    except Exception as e:
-        logger.error(f"Failed to log activity: {e}")
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await log_activity(update, '/start')
     await update.message.reply_text(
         "👋 Hello! I'm your bot.\n\n"
         "Use /cmds to see all available commands\n"
@@ -39,7 +17,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def cmds(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await log_activity(update, '/cmds')
     commands_list = (
         "📋 *Available Commands:*\n\n"
         "/start - Start the bot and see welcome message\n"
@@ -49,7 +26,6 @@ async def cmds(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(commands_list, parse_mode='Markdown')
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await log_activity(update, '/help')
     help_text = (
         "📖 *How to Use Each Command:*\n\n"
         "**/start**\n"
