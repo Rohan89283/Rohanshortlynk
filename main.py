@@ -87,41 +87,83 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cookie_string = ' '.join(context.args)
 
     status_msg = await update.message.reply_text(
-        "🔄 Checking Instagram cookies...\n"
-        "This may take 10-15 seconds..."
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🔍 *INSTAGRAM COOKIE CHECKER*\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "📋 *Step 1:* Login Check ⏳\n"
+        "📋 *Step 2:* Profile Info ⏸️\n"
+        "📋 *Step 3:* Post Count ⏸️\n\n"
+        "⏱️ *Time:* 0s\n"
+        "🌐 *Proxy:* Checking...\n"
+        "📍 *Location:* N/A\n"
+        "👤 *Username:* N/A\n"
+        "📊 *Total Posts:* N/A\n\n"
+        "🔄 Initializing...",
+        parse_mode='Markdown'
     )
+
+    import time
+    start_time = time.time()
 
     try:
         result = check_instagram_cookie(cookie_string, user_id=user_id)
 
-        proxy_info = f"\n🌐 Proxy: {result.get('proxy_used', 'Direct')}"
+        elapsed = int(time.time() - start_time)
+        proxy_used = result.get('proxy_used', 'Direct')
+        username = result.get('username', 'N/A')
+        total_posts = result.get('total_posts', 'N/A')
+        location = result.get('location', 'N/A')
+
+        step1_status = "✅" if result['valid'] else "❌"
+        step1_text = "Completed" if result['valid'] else "Failed"
+
+        final_status = (
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🔍 *INSTAGRAM COOKIE CHECKER*\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"📋 *Step 1:* Login Check {step1_status} {step1_text}\n"
+            f"📋 *Step 2:* Profile Info ⏸️ Pending\n"
+            f"📋 *Step 3:* Post Count ⏸️ Pending\n\n"
+            f"⏱️ *Time:* {elapsed}s\n"
+            f"🌐 *Proxy:* {proxy_used}\n"
+            f"📍 *Location:* {location}\n"
+            f"👤 *Username:* {username}\n"
+            f"📊 *Total Posts:* {total_posts}\n\n"
+        )
 
         if result['valid']:
-            status_text = f"✅ {result['message']}\n\nURL: {result['url']}{proxy_info}"
+            final_status += f"✅ *Status:* Cookie Valid - Login Successful!\n"
         else:
-            status_text = f"❌ {result['message']}\n\nURL: {result.get('url', 'N/A')}{proxy_info}"
+            final_status += f"❌ *Status:* {result['message']}\n"
 
-        await status_msg.edit_text(status_text)
+        await status_msg.edit_text(final_status, parse_mode='Markdown')
 
-        # Send screenshot if available
         if result['screenshot']:
             await update.message.reply_photo(
                 photo=BytesIO(result['screenshot']),
-                caption="📸 Instagram page screenshot"
-            )
-        else:
-            await update.message.reply_text(
-                "⚠️ Could not capture screenshot. Check logs for details."
+                caption=f"📸 Step 1 Screenshot - Login Check"
             )
 
     except Exception as e:
+        elapsed = int(time.time() - start_time)
         logger.error(f"Error in ig_command: {e}")
-        await status_msg.edit_text(
-            f"❌ An error occurred: {str(e)[:200]}"
+
+        error_status = (
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🔍 *INSTAGRAM COOKIE CHECKER*\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "📋 *Step 1:* Login Check ❌ Error\n"
+            "📋 *Step 2:* Profile Info ⏸️ Pending\n"
+            "📋 *Step 3:* Post Count ⏸️ Pending\n\n"
+            f"⏱️ *Time:* {elapsed}s\n"
+            "🌐 *Proxy:* N/A\n"
+            "📍 *Location:* N/A\n"
+            "👤 *Username:* N/A\n"
+            "📊 *Total Posts:* N/A\n\n"
+            f"❌ *Error:* {str(e)[:100]}"
         )
-        await update.message.reply_text(
-            "Please check if your cookie format is correct and try again."
-        )
+
+        await status_msg.edit_text(error_status, parse_mode='Markdown')
 
 async def addproxy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Add proxies from text or file"""

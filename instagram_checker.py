@@ -142,6 +142,9 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
 
             is_logged_in = False
             message = "Cookie is invalid - not logged in"
+            username = "N/A"
+            total_posts = "N/A"
+            location = "N/A"
 
             # Multiple checks for login status
             if '/accounts/login' not in current_url:
@@ -155,6 +158,28 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                     is_logged_in = True
                     message = "Cookie is valid - Successfully logged in!"
                     logger.info("Login successful!")
+
+                    # Try to extract username from page
+                    try:
+                        import re
+                        import json
+
+                        # Look for username in script tags
+                        username_match = re.search(r'"username":"([^"]+)"', driver.page_source)
+                        if username_match:
+                            username = username_match.group(1)
+                            logger.info(f"Found username: {username}")
+                    except Exception as e:
+                        logger.warning(f"Failed to extract username: {e}")
+
+            # Try to get location from proxy
+            if proxy_info:
+                try:
+                    location = f"{proxy_info['host']}"
+                except:
+                    location = "Proxy"
+            else:
+                location = "Direct Connection"
 
             # Take screenshot
             screenshot = driver.get_screenshot_as_png()
@@ -170,7 +195,10 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                 'screenshot': screenshot,
                 'message': message,
                 'url': current_url,
-                'proxy_used': proxy_used
+                'proxy_used': proxy_used,
+                'username': username,
+                'total_posts': total_posts,
+                'location': location
             }
 
         except TimeoutException:
@@ -179,13 +207,17 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                 proxy_manager.update_proxy_usage(active_proxy['id'], False)
 
             proxy_used = f"{proxy_info['host']}:{proxy_info['port']}" if proxy_info else "Direct"
+            location = f"{proxy_info['host']}" if proxy_info else "Direct Connection"
 
             return {
                 'valid': False,
                 'screenshot': screenshot,
                 'message': "Timeout while checking login status",
                 'url': driver.current_url,
-                'proxy_used': proxy_used
+                'proxy_used': proxy_used,
+                'username': 'N/A',
+                'total_posts': 'N/A',
+                'location': location
             }
 
     except WebDriverException as e:
@@ -194,13 +226,17 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
             proxy_manager.update_proxy_usage(active_proxy['id'], False)
 
         proxy_used = f"{proxy_info['host']}:{proxy_info['port']}" if proxy_info else "Direct"
+        location = f"{proxy_info['host']}" if proxy_info else "Direct Connection"
 
         return {
             'valid': False,
             'screenshot': None,
             'message': f"Browser error: {str(e)[:100]}",
             'url': None,
-            'proxy_used': proxy_used
+            'proxy_used': proxy_used,
+            'username': 'N/A',
+            'total_posts': 'N/A',
+            'location': location
         }
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
@@ -208,13 +244,17 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
             proxy_manager.update_proxy_usage(active_proxy['id'], False)
 
         proxy_used = f"{proxy_info['host']}:{proxy_info['port']}" if proxy_info else "Direct"
+        location = f"{proxy_info['host']}" if proxy_info else "Direct Connection"
 
         return {
             'valid': False,
             'screenshot': None,
             'message': f"Error: {str(e)[:100]}",
             'url': None,
-            'proxy_used': proxy_used
+            'proxy_used': proxy_used,
+            'username': 'N/A',
+            'total_posts': 'N/A',
+            'location': location
         }
     finally:
         if driver:
