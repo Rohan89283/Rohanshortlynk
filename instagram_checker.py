@@ -704,18 +704,24 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         if update_callback:
                             await update_callback(3, "Looking for second 'Continue' button...")
 
-                        logger.info("Searching for second 'Continue' button in popup...")
+                        logger.info("Searching for second 'Continue' button in 'Connect a Meta ad account' popup...")
                         try:
                             # Wait a bit for the second popup to appear
                             time.sleep(2)
 
-                            # Try multiple selectors for the second "Continue" button
+                            # Try multiple selectors for the second "Continue" button - VERY SPECIFIC for the blue button
                             continue_selectors_2 = [
+                                # Most specific - target the exact div structure from the HTML
+                                "//div[contains(@class, 'x6s0dn4') and contains(@class, 'x78zum5')]//div[contains(@class, 'x1vvvo52') and contains(text(), 'Continue')]",
+                                "//div[contains(@class, 'x1vvvo52') and contains(@class, 'x1fvot60') and contains(@class, 'xk50ysn') and contains(text(), 'Continue')]",
+                                # Try the parent clickable div
+                                "//div[contains(@class, 'x6s0dn4') and contains(@class, 'x78zum5') and .//div[contains(text(), 'Continue')]]",
+                                # Try by class combinations
+                                "//div[contains(@class, 'xk50ysn') and contains(@class, 'xxio538') and contains(., 'Continue')]",
+                                "//div[contains(@class, 'x1heor9g') and contains(@class, 'xuxw1ft') and contains(., 'Continue')]",
+                                # General selectors
                                 "//div[contains(@class, 'x1vvvo52') and contains(., 'Continue')]",
                                 "//div[contains(@class, 'x1fvot60') and contains(., 'Continue')]",
-                                "//div[contains(@class, 'xk50ysn') and contains(., 'Continue')]",
-                                "//div[contains(@class, 'xxio538') and contains(., 'Continue')]",
-                                "//div[contains(@class, 'x1heor9g') and contains(., 'Continue')]",
                                 "//span[contains(text(), 'Continue')]",
                                 "//div[contains(text(), 'Continue')]",
                                 "//button[contains(., 'Continue')]",
@@ -727,7 +733,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                     continue_button_2 = WebDriverWait(driver, 10).until(
                                         EC.element_to_be_clickable((By.XPATH, selector))
                                     )
-                                    logger.info(f"Found second 'Continue' button using selector: {selector}")
+                                    logger.info(f"✓ Found second 'Continue' button using selector: {selector}")
 
                                     # Scroll to button if needed
                                     try:
@@ -736,13 +742,20 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                     except:
                                         pass
 
-                                    # Click the button
-                                    continue_button_2.click()
+                                    # Try clicking with JavaScript as backup
+                                    try:
+                                        continue_button_2.click()
+                                        logger.info("✓ Clicked second 'Continue' button (normal click)")
+                                    except Exception as click_error:
+                                        logger.warning(f"Normal click failed, trying JavaScript click: {click_error}")
+                                        driver.execute_script("arguments[0].click();", continue_button_2)
+                                        logger.info("✓ Clicked second 'Continue' button (JavaScript click)")
+
                                     continue_clicked_2 = True
-                                    logger.info("✓ Clicked second 'Continue' button")
+                                    logger.info("✓✓✓ SECOND 'CONTINUE' BUTTON CLICKED SUCCESSFULLY ✓✓✓")
 
                                     if update_callback:
-                                        await update_callback(3, "Clicked second 'Continue', checking for popup tab...")
+                                        await update_callback(3, "✓ Clicked second 'Continue', checking for popup tab...")
 
                                     # Wait after click to see if popup tab opens
                                     time.sleep(3)
@@ -752,10 +765,12 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                     continue
 
                             if not continue_clicked_2:
-                                logger.info("No second 'Continue' button found")
+                                logger.warning("⚠️ WARNING: No second 'Continue' button found - this is critical!")
+                                logger.warning("⚠️ The 'Connect a Meta ad account' popup may not have appeared")
 
                         except Exception as e:
-                            logger.warning(f"Failed to click second 'Continue' button: {e}")
+                            logger.error(f"❌ CRITICAL ERROR: Failed to click second 'Continue' button: {e}")
+                            logger.error("❌ This will prevent the popup tab from opening")
 
                         # Check if a popup tab opened after second Continue
                         screenshot_step3 = None
