@@ -150,23 +150,6 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
-        # Set locale to English for Facebook/Meta pages
-        logger.info("Setting locale preferences to English...")
-        driver.get('https://www.facebook.com/')
-        time.sleep(1)
-
-        # Set Facebook locale cookie to English
-        try:
-            driver.add_cookie({
-                'name': 'locale',
-                'value': 'en_US',
-                'domain': '.facebook.com',
-                'path': '/'
-            })
-            logger.info("✓ Facebook locale cookie set to en_US")
-        except Exception as e:
-            logger.warning(f"Could not set Facebook locale cookie: {e}")
-
         # Go to Instagram
         logger.info("Navigating to Instagram...")
         if update_callback:
@@ -192,15 +175,10 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
             await update_callback(1, "Applying cookies...")
         driver.refresh()
 
-        # Wait for page to reload with cookies
-        WebDriverWait(driver, 5).until(
-            lambda d: d.execute_script('return document.readyState') == 'complete'
-        )
-
         # Check if logged in by looking for specific elements
         try:
             # Wait for page to load (reduced timeout)
-            WebDriverWait(driver, 6).until(
+            WebDriverWait(driver, 4).until(
                 lambda d: d.execute_script('return document.readyState') == 'complete'
             )
 
@@ -314,11 +292,11 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                     # Wait for page to load
                     logger.info("Waiting for page to load completely...")
-                    WebDriverWait(driver, 10).until(
+                    WebDriverWait(driver, 6).until(
                         lambda d: d.execute_script('return document.readyState') == 'complete'
                     )
                     logger.info("✓ Page loaded")
-                    time.sleep(3)
+                    time.sleep(1)
                     logger.info("✓ Additional wait complete")
 
                     # Log current URL
@@ -389,7 +367,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                             logger.warning(f"Failed to click Instagram login button: {e}")
 
                         # Wait a moment for any popups/tabs to open
-                        time.sleep(3)
+                        time.sleep(1.5)
 
                         if update_callback:
                             await update_callback(2, "Checking for popup/new tab...")
@@ -431,7 +409,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                                 await update_callback(2, "Auto-login popup detected, waiting for redirect...")
 
                                             # Wait for auto-close
-                                            time.sleep(3)
+                                            time.sleep(1.5)
                                         else:
                                             # Try to click "Log in as username" button
                                             if update_callback:
@@ -449,14 +427,14 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                                                 for selector in login_as_selectors:
                                                     try:
-                                                        login_as_button = WebDriverWait(driver, 3).until(
+                                                        login_as_button = WebDriverWait(driver, 2).until(
                                                             EC.element_to_be_clickable((By.XPATH, selector))
                                                         )
                                                         logger.info(f"Found 'Log in as' button using selector: {selector}")
                                                         login_as_button.click()
                                                         login_button_clicked = True
                                                         logger.info("✓ Clicked 'Log in as' button")
-                                                        time.sleep(3)
+                                                        time.sleep(1.5)
                                                         break
                                                     except:
                                                         continue
@@ -482,7 +460,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                             logger.info("✓ Switched to available window")
 
                                     # Wait for redirect to complete
-                                    time.sleep(3)
+                                    time.sleep(1.5)
                                     main_url_after_login = driver.current_url
                                     logger.info(f"Main window URL after popup: {main_url_after_login}")
                                     break
@@ -497,7 +475,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                             }
 
                             # Wait a bit for any redirect
-                            time.sleep(3)
+                            time.sleep(1.5)
                             main_url_after_login = driver.current_url
                             logger.info(f"Current URL (no popup): {main_url_after_login}")
 
