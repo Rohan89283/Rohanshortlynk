@@ -10,17 +10,13 @@ class ProxyValidator:
     """Validate and parse proxy strings in various formats"""
 
     PROXY_PATTERNS = [
-        # IP:Port
-        r'^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d{1,5})$',
-        # IP:Port:Username:Password
-        r'^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d{1,5}):([^:]+):(.+)$',
-        # Username:Password@IP:Port
-        r'^([^:@]+):([^@]+)@(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d{1,5})$',
-        # Protocol://IP:Port
-        r'^(https?|socks[45])://(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d{1,5})$',
-        # Protocol://Username:Password@IP:Port
-        r'^(https?|socks[45])://([^:@]+):([^@]+)@(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d{1,5})$',
-        # Host:Port (domain)
+        # Host:Port:Username:Password (supports domains and IPs, password can contain colons)
+        r'^([a-zA-Z0-9.-]+):(\d{1,5}):([^:]+):(.+)$',
+        # Username:Password@Host:Port (password can contain special chars)
+        r'^([^:@]+):(.+)@([a-zA-Z0-9.-]+):(\d{1,5})$',
+        # Protocol://Username:Password@Host:Port
+        r'^(https?|socks[45])://([^:@]+):(.+)@([a-zA-Z0-9.-]+):(\d{1,5})$',
+        # Host:Port (domain or IP)
         r'^([a-zA-Z0-9.-]+):(\d{1,5})$',
         # Protocol://Host:Port
         r'^(https?|socks[45])://([a-zA-Z0-9.-]+):(\d{1,5})$',
@@ -36,19 +32,8 @@ class ProxyValidator:
             if match:
                 groups = match.groups()
 
-                # Pattern 1: IP:Port
-                if len(groups) == 2 and groups[0].replace('.', '').isdigit():
-                    return {
-                        'host': groups[0],
-                        'port': int(groups[1]),
-                        'username': None,
-                        'password': None,
-                        'proxy_type': 'http',
-                        'proxy_string': proxy_string
-                    }
-
-                # Pattern 2: IP:Port:Username:Password
-                elif len(groups) == 4 and groups[0].replace('.', '').isdigit():
+                # Pattern 1: Host:Port:Username:Password (4 groups)
+                if len(groups) == 4 and groups[1].isdigit():
                     return {
                         'host': groups[0],
                         'port': int(groups[1]),
@@ -58,8 +43,8 @@ class ProxyValidator:
                         'proxy_string': proxy_string
                     }
 
-                # Pattern 3: Username:Password@IP:Port
-                elif len(groups) == 4 and groups[2].replace('.', '').isdigit():
+                # Pattern 2: Username:Password@Host:Port (4 groups)
+                elif len(groups) == 4 and groups[3].isdigit():
                     return {
                         'host': groups[2],
                         'port': int(groups[3]),
@@ -69,24 +54,35 @@ class ProxyValidator:
                         'proxy_string': proxy_string
                     }
 
-                # Pattern 4: Protocol://IP:Port
-                elif len(groups) == 3:
-                    return {
-                        'host': groups[1],
-                        'port': int(groups[2]),
-                        'username': None,
-                        'password': None,
-                        'proxy_type': groups[0].lower(),
-                        'proxy_string': proxy_string
-                    }
-
-                # Pattern 5: Protocol://Username:Password@IP:Port
+                # Pattern 3: Protocol://Username:Password@Host:Port (5 groups)
                 elif len(groups) == 5:
                     return {
                         'host': groups[3],
                         'port': int(groups[4]),
                         'username': groups[1],
                         'password': groups[2],
+                        'proxy_type': groups[0].lower(),
+                        'proxy_string': proxy_string
+                    }
+
+                # Pattern 4: Host:Port (2 groups)
+                elif len(groups) == 2 and groups[1].isdigit():
+                    return {
+                        'host': groups[0],
+                        'port': int(groups[1]),
+                        'username': None,
+                        'password': None,
+                        'proxy_type': 'http',
+                        'proxy_string': proxy_string
+                    }
+
+                # Pattern 5: Protocol://Host:Port (3 groups)
+                elif len(groups) == 3 and groups[2].isdigit():
+                    return {
+                        'host': groups[1],
+                        'port': int(groups[2]),
+                        'username': None,
+                        'password': None,
                         'proxy_type': groups[0].lower(),
                         'proxy_string': proxy_string
                     }

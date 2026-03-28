@@ -1,7 +1,7 @@
 import os
 import time
 import logging
-from selenium import webdriver
+from seleniumwire import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -80,24 +80,36 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
         # Add binary location
         chrome_options.binary_location = '/usr/bin/google-chrome'
 
-        # Add proxy if available
+        # Setup selenium-wire options for proxy
+        seleniumwire_options = {}
+
         if proxy_info:
             from proxy_validator import ProxyValidator
             proxy_url = ProxyValidator.build_proxy_url(proxy_info)
-            chrome_options.add_argument(f'--proxy-server={proxy_url}')
-            logger.info(f"Chrome configured with proxy: {proxy_url}")
 
-        # Initialize driver with explicit service
+            # Configure selenium-wire proxy
+            seleniumwire_options['proxy'] = {
+                'http': proxy_url,
+                'https': proxy_url,
+                'no_proxy': 'localhost,127.0.0.1'
+            }
+            logger.info(f"Selenium-wire configured with proxy: {proxy_info['host']}:{proxy_info['port']}")
+
+        # Initialize driver with selenium-wire
         logger.info("Initializing Chrome WebDriver...")
         try:
-            driver = webdriver.Chrome(options=chrome_options)
+            driver = webdriver.Chrome(
+                options=chrome_options,
+                seleniumwire_options=seleniumwire_options if seleniumwire_options else None
+            )
         except Exception as e:
             logger.error(f"Failed to initialize Chrome: {e}")
             return {
                 'valid': False,
                 'screenshot': None,
                 'message': f"Chrome initialization failed: {str(e)[:100]}",
-                'url': None
+                'url': None,
+                'proxy_used': f"{proxy_info['host']}:{proxy_info['port']}" if proxy_info else "Direct"
             }
 
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
