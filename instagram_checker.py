@@ -595,6 +595,8 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                         # Try to find and click "Get started" button
                         get_started_clicked = False
+                        continue_clicked = False
+
                         if update_callback:
                             await update_callback(3, "Looking for 'Get started' button...")
 
@@ -641,14 +643,62 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         except Exception as e:
                             logger.warning(f"Failed to click 'Get started' button: {e}")
 
+                        # Try to find and click "Continue" button
+                        if update_callback:
+                            await update_callback(3, "Looking for 'Continue' button...")
+
+                        logger.info("Searching for 'Continue' button...")
+                        try:
+                            # Try multiple selectors for the "Continue" button
+                            continue_selectors = [
+                                "//span[contains(text(), 'Continue')]",
+                                "//div[contains(text(), 'Continue')]",
+                                "//button[contains(., 'Continue')]",
+                                "//a[contains(., 'Continue')]",
+                            ]
+
+                            for selector in continue_selectors:
+                                try:
+                                    continue_button = WebDriverWait(driver, 5).until(
+                                        EC.element_to_be_clickable((By.XPATH, selector))
+                                    )
+                                    logger.info(f"Found 'Continue' button using selector: {selector}")
+
+                                    # Click the button
+                                    continue_button.click()
+                                    continue_clicked = True
+                                    logger.info("✓ Clicked 'Continue' button")
+
+                                    if update_callback:
+                                        await update_callback(3, "Clicked 'Continue', waiting for page...")
+
+                                    # Wait for page to load after click
+                                    time.sleep(5)
+
+                                    # Update URL after click
+                                    ad_center_final_url = driver.current_url
+                                    logger.info(f"URL after 'Continue' click: {ad_center_final_url}")
+
+                                    break
+                                except Exception as e:
+                                    logger.debug(f"Selector {selector} did not work: {e}")
+                                    continue
+
+                            if not continue_clicked:
+                                logger.info("No 'Continue' button found - may already be past that screen")
+
+                        except Exception as e:
+                            logger.warning(f"Failed to click 'Continue' button: {e}")
+
                         # Take screenshot at END of Step 3
                         screenshot_step3 = driver.get_screenshot_as_png()
-                        logger.info("✓ Step 3 screenshot captured (Ad Center page after Get started)")
+                        logger.info("✓ Step 3 screenshot captured (Ad Center page after Continue)")
 
                         logger.info("=" * 80)
                         logger.info("STEP 3: COMPLETED - Ad Center check done!")
                         logger.info(f"On Ad Center: {on_ad_center}")
                         logger.info(f"Get started clicked: {get_started_clicked}")
+                        logger.info(f"Continue clicked: {continue_clicked}")
                         logger.info("=" * 80)
 
                         # Update result with step 3 data
@@ -657,6 +707,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         result['step3_current_url'] = ad_center_final_url
                         result['step3_on_ad_center'] = on_ad_center
                         result['step3_get_started_clicked'] = get_started_clicked
+                        result['step3_continue_clicked'] = continue_clicked
 
                     except Exception as e:
                         logger.error(f"Step 3 failed: {e}", exc_info=True)

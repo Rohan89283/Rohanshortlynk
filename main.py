@@ -116,6 +116,7 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Get Step 3 details
         step3_get_started_clicked = result.get('step3_get_started_clicked', False)
+        step3_continue_clicked = result.get('step3_continue_clicked', False)
 
         final_status = (
             "━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -130,7 +131,8 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🪟 *New Tab/Popup:* {'Yes' if step2_new_tab else 'No'}\n"
             f"🔑 *Login Button Clicked:* {'Yes' if step2_login_clicked else 'No'}\n"
             f"📱 *Total Windows:* {step2_total_windows}\n"
-            f"🚀 *Get Started Clicked:* {'Yes' if step3_get_started_clicked else 'No'}\n\n"
+            f"🚀 *Get Started Clicked:* {'Yes' if step3_get_started_clicked else 'No'}\n"
+            f"▶️ *Continue Clicked:* {'Yes' if step3_continue_clicked else 'No'}\n\n"
         )
 
         if result['valid']:
