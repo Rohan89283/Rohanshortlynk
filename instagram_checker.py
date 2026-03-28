@@ -22,9 +22,9 @@ def parse_cookie_string(cookie_string: str) -> list:
 
 async def check_instagram_cookie(cookie_string: str, user_id=None, proxy_info=None, update_callback=None):
     """
-    Simple Instagram cookie checker - Step 1 only
+    Instagram cookie checker with Step 1 (login check) and Step 2 (Facebook Business Suite)
 
-    Returns: dict with 'valid', 'screenshot', 'message', 'username'
+    Returns: dict with 'valid', 'message', 'username', 'step2_status'
     """
     driver = None
 
@@ -77,15 +77,102 @@ async def check_instagram_cookie(cookie_string: str, user_id=None, proxy_info=No
             if username_match:
                 username = username_match.group(1)
 
-        screenshot = driver.get_screenshot_as_png()
+        if not is_logged_in:
+            return {
+                'valid': False,
+                'screenshot': None,
+                'message': "Invalid cookie",
+                'username': 'N/A',
+                'url': current_url,
+                'step1_complete': False,
+                'step2_complete': False,
+                'step2_status': 'Skipped - Step 1 failed'
+            }
+
+        # Step 2: Navigate to Facebook Business Suite and click "Login with Instagram"
+        step2_success = False
+        step2_status = ""
+
+        if update_callback:
+            await update_callback(2, "Navigating to Facebook Business Suite...")
+
+        try:
+            import time
+            from selenium.webdriver.common.by import By
+
+            driver.get('https://business.facebook.com/latest/home')
+
+            time.sleep(3)
+
+            WebDriverWait(driver, 10).until(
+                lambda d: d.execute_script('return document.readyState') == 'complete'
+            )
+
+            if update_callback:
+                await update_callback(2, "Looking for 'Login with Instagram' button...")
+
+            time.sleep(2)
+
+            # Try to find and click the Instagram login button
+            login_button_found = False
+            try:
+                # Try finding by text content
+                buttons = driver.find_elements(By.TAG_NAME, "button")
+                links = driver.find_elements(By.TAG_NAME, "a")
+                all_clickable = buttons + links
+
+                for element in all_clickable:
+                    try:
+                        text = element.text.lower()
+                        if 'instagram' in text and ('login' in text or 'log in' in text or 'continue' in text):
+                            if update_callback:
+                                await update_callback(2, "Clicking 'Login with Instagram'...")
+                            element.click()
+                            login_button_found = True
+                            time.sleep(3)
+                            step2_success = True
+                            step2_status = "Successfully clicked 'Login with Instagram'"
+                            break
+                    except:
+                        continue
+
+                if not login_button_found:
+                    # Try JavaScript click
+                    clicked = driver.execute_script("""
+                        const elements = [...document.querySelectorAll('button, a, span, div[role="button"]')];
+                        for (const el of elements) {
+                            const text = el.textContent.toLowerCase();
+                            if (text.includes('instagram') && (text.includes('login') || text.includes('log in') || text.includes('continue'))) {
+                                el.click();
+                                return true;
+                            }
+                        }
+                        return false;
+                    """)
+                    if clicked:
+                        time.sleep(3)
+                        step2_success = True
+                        step2_status = "Successfully clicked 'Login with Instagram' (JS)"
+                    else:
+                        step2_status = "Could not find 'Login with Instagram' button"
+
+            except Exception as e:
+                logger.warning(f"Error finding/clicking button: {e}")
+                step2_status = f"Error finding button: {str(e)[:100]}"
+
+        except Exception as e:
+            logger.warning(f"Error in Step 2: {e}")
+            step2_status = f"Error: {str(e)[:100]}"
 
         return {
             'valid': is_logged_in,
-            'screenshot': screenshot,
-            'message': "Valid cookie - Logged in!" if is_logged_in else "Invalid cookie",
+            'screenshot': None,
+            'message': f"Valid cookie - Logged in! Step 2: {step2_status}",
             'username': username,
             'url': current_url,
-            'step1_complete': is_logged_in
+            'step1_complete': is_logged_in,
+            'step2_complete': step2_success,
+            'step2_status': step2_status
         }
 
     except Exception as e:
@@ -96,7 +183,9 @@ async def check_instagram_cookie(cookie_string: str, user_id=None, proxy_info=No
             'message': f"Error: {str(e)[:100]}",
             'username': 'N/A',
             'url': None,
-            'step1_complete': False
+            'step1_complete': False,
+            'step2_complete': False,
+            'step2_status': 'Error in Step 1'
         }
     finally:
         if driver:
