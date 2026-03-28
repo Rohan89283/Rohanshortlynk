@@ -212,7 +212,52 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
 
                     # Navigate to Facebook Business Manager
                     driver.get('https://business.facebook.com/latest/home')
-                    time.sleep(5)  # Wait for page to load
+                    time.sleep(4)  # Wait for page to load
+
+                    # Try to click "Log in with Instagram" button
+                    try:
+                        # Wait for the login page to appear
+                        WebDriverWait(driver, 10).until(
+                            lambda d: d.execute_script('return document.readyState') == 'complete'
+                        )
+
+                        # Look for Instagram login button - try multiple selectors
+                        instagram_login_clicked = False
+
+                        # Try clicking by text content
+                        try:
+                            buttons = driver.find_elements(By.TAG_NAME, 'button')
+                            for button in buttons:
+                                if 'instagram' in button.text.lower():
+                                    button.click()
+                                    instagram_login_clicked = True
+                                    logger.info("Clicked Instagram login button by text")
+                                    break
+                        except Exception as e:
+                            logger.warning(f"Failed to click by button text: {e}")
+
+                        # If not clicked yet, try finding by div with text
+                        if not instagram_login_clicked:
+                            try:
+                                divs = driver.find_elements(By.TAG_NAME, 'div')
+                                for div in divs:
+                                    if 'log in with instagram' in div.text.lower():
+                                        div.click()
+                                        instagram_login_clicked = True
+                                        logger.info("Clicked Instagram login by div")
+                                        break
+                            except Exception as e:
+                                logger.warning(f"Failed to click by div: {e}")
+
+                        # If clicked, wait for next page
+                        if instagram_login_clicked:
+                            time.sleep(5)
+                            logger.info("Waiting for Instagram login redirect...")
+                        else:
+                            logger.warning("Instagram login button not found, taking screenshot of current page")
+
+                    except Exception as e:
+                        logger.warning(f"Failed to click Instagram login: {e}")
 
                     # Take screenshot for Step 2
                     screenshot_step2 = driver.get_screenshot_as_png()
