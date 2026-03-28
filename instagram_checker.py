@@ -13,9 +13,10 @@ from typing import Optional, Dict
 logger = logging.getLogger(__name__)
 
 USER_AGENTS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
 ]
 
 def parse_cookie_string(cookie_string: str) -> list:
@@ -62,21 +63,46 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
             except Exception as e:
                 logger.warning(f"Failed to get proxy: {e}")
 
-        # Setup Chrome options
+        # Setup Chrome options with anti-detection
         chrome_options = Options()
         chrome_options.add_argument('--headless=new')
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--disable-gpu')
         chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-        chrome_options.add_argument(f'user-agent={USER_AGENTS[0]}')
+
+        # Use random user agent
+        import random
+        user_agent = random.choice(USER_AGENTS)
+        chrome_options.add_argument(f'user-agent={user_agent}')
+
         chrome_options.add_argument('--window-size=1920,1080')
         chrome_options.add_argument('--disable-software-rasterizer')
         chrome_options.add_argument('--disable-extensions')
         chrome_options.add_argument('--disable-setuid-sandbox')
         chrome_options.add_argument('--remote-debugging-port=9222')
-        chrome_options.add_experimental_option('excludeSwitches', ['enable-automation'])
+
+        # Additional anti-detection measures
+        chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+        chrome_options.add_argument('--disable-web-security')
+        chrome_options.add_argument('--disable-features=IsolateOrigins,site-per-process')
+        chrome_options.add_argument('--allow-running-insecure-content')
+        chrome_options.add_argument('--lang=en-US,en;q=0.9')
+        chrome_options.add_argument('--disable-infobars')
+
+        chrome_options.add_experimental_option('excludeSwitches', ['enable-automation', 'enable-logging'])
         chrome_options.add_experimental_option('useAutomationExtension', False)
+
+        # Set preferences to avoid detection
+        prefs = {
+            'credentials_enable_service': False,
+            'profile.password_manager_enabled': False,
+            'profile.default_content_setting_values.notifications': 2,
+            'webrtc.ip_handling_policy': 'disable_non_proxied_udp',
+            'webrtc.multiple_routes_enabled': False,
+            'webrtc.nonproxied_udp_enabled': False
+        }
+        chrome_options.add_experimental_option('prefs', prefs)
 
         # Add binary location
         chrome_options.binary_location = '/usr/bin/google-chrome'
@@ -211,48 +237,89 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                     logger.info("Step 1 completed. Starting Step 2 - Facebook Business Manager...")
 
                     # Navigate to Facebook Business Manager
+                    logger.info("Navigating to Facebook Business Manager...")
                     driver.get('https://business.facebook.com/latest/home')
-                    time.sleep(4)  # Wait for page to load
+
+                    # Wait for page to fully load
+                    time.sleep(5)
+
+                    # Inject anti-detection scripts
+                    driver.execute_script("""
+                        Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                        Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+                        Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+                    """)
 
                     # Try to click "Log in with Instagram" button
                     try:
                         # Wait for the login page to appear
-                        WebDriverWait(driver, 10).until(
+                        WebDriverWait(driver, 15).until(
                             lambda d: d.execute_script('return document.readyState') == 'complete'
                         )
 
                         # Look for Instagram login button - try multiple selectors
                         instagram_login_clicked = False
 
-                        # Try clicking by text content
+                        # Method 1: Try finding by text in all clickable elements
                         try:
-                            buttons = driver.find_elements(By.TAG_NAME, 'button')
-                            for button in buttons:
-                                if 'instagram' in button.text.lower():
-                                    button.click()
+                            all_elements = driver.find_elements(By.XPATH, "//*[contains(text(), 'Instagram') or contains(text(), 'instagram')]")
+                            for element in all_elements:
+                                if 'log in' in element.text.lower() or 'login' in element.text.lower():
+                                    # Scroll to element
+                                    driver.execute_script("arguments[0].scrollIntoView(true);", element)
+                                    time.sleep(1)
+                                    # Click using JavaScript
+                                    driver.execute_script("arguments[0].click();", element)
                                     instagram_login_clicked = True
-                                    logger.info("Clicked Instagram login button by text")
+                                    logger.info(f"Clicked Instagram login using XPath: {element.text}")
                                     break
                         except Exception as e:
-                            logger.warning(f"Failed to click by button text: {e}")
+                            logger.warning(f"Method 1 failed: {e}")
 
-                        # If not clicked yet, try finding by div with text
+                        # Method 2: Try finding button elements
                         if not instagram_login_clicked:
                             try:
-                                divs = driver.find_elements(By.TAG_NAME, 'div')
-                                for div in divs:
-                                    if 'log in with instagram' in div.text.lower():
-                                        div.click()
+                                buttons = driver.find_elements(By.TAG_NAME, 'button')
+                                for button in buttons:
+                                    if 'instagram' in button.text.lower():
+                                        driver.execute_script("arguments[0].scrollIntoView(true);", button)
+                                        time.sleep(1)
+                                        driver.execute_script("arguments[0].click();", button)
                                         instagram_login_clicked = True
-                                        logger.info("Clicked Instagram login by div")
+                                        logger.info(f"Clicked Instagram login button: {button.text}")
                                         break
                             except Exception as e:
-                                logger.warning(f"Failed to click by div: {e}")
+                                logger.warning(f"Method 2 failed: {e}")
 
-                        # If clicked, wait for next page
+                        # Method 3: Try finding by div/span with Instagram text
+                        if not instagram_login_clicked:
+                            try:
+                                clickable_elements = driver.find_elements(By.CSS_SELECTOR, "div[role='button'], span[role='button'], div[tabindex='0']")
+                                for element in clickable_elements:
+                                    if 'instagram' in element.text.lower():
+                                        driver.execute_script("arguments[0].scrollIntoView(true);", element)
+                                        time.sleep(1)
+                                        driver.execute_script("arguments[0].click();", element)
+                                        instagram_login_clicked = True
+                                        logger.info(f"Clicked Instagram login element: {element.text}")
+                                        break
+                            except Exception as e:
+                                logger.warning(f"Method 3 failed: {e}")
+
+                        # If clicked, wait longer for redirect and page load
                         if instagram_login_clicked:
-                            time.sleep(5)
-                            logger.info("Waiting for Instagram login redirect...")
+                            logger.info("Instagram login button clicked! Waiting for page to load...")
+                            time.sleep(8)  # Wait longer for redirect
+
+                            # Wait for page to be fully loaded
+                            WebDriverWait(driver, 15).until(
+                                lambda d: d.execute_script('return document.readyState') == 'complete'
+                            )
+
+                            # Additional wait for dynamic content
+                            time.sleep(3)
+
+                            logger.info(f"Current URL after click: {driver.current_url}")
                         else:
                             logger.warning("Instagram login button not found, taking screenshot of current page")
 
@@ -265,7 +332,7 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                     result['screenshot_step2'] = screenshot_step2
                     result['step2_complete'] = True
 
-                    logger.info("Step 2 completed - Facebook Business Manager loaded")
+                    logger.info("Step 2 completed - Screenshot captured")
 
                 except Exception as e:
                     logger.warning(f"Step 2 failed: {e}")
