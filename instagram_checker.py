@@ -48,11 +48,29 @@ def check_instagram_cookie(cookie_string: str) -> dict:
         chrome_options.add_argument('--disable-blink-features=AutomationControlled')
         chrome_options.add_argument(f'user-agent={USER_AGENTS[0]}')
         chrome_options.add_argument('--window-size=1920,1080')
+        chrome_options.add_argument('--disable-software-rasterizer')
+        chrome_options.add_argument('--disable-extensions')
+        chrome_options.add_argument('--disable-setuid-sandbox')
+        chrome_options.add_argument('--remote-debugging-port=9222')
         chrome_options.add_experimental_option('excludeSwitches', ['enable-automation'])
         chrome_options.add_experimental_option('useAutomationExtension', False)
 
-        # Initialize driver
-        driver = webdriver.Chrome(options=chrome_options)
+        # Add binary location
+        chrome_options.binary_location = '/usr/bin/google-chrome'
+
+        # Initialize driver with explicit service
+        logger.info("Initializing Chrome WebDriver...")
+        try:
+            driver = webdriver.Chrome(options=chrome_options)
+        except Exception as e:
+            logger.error(f"Failed to initialize Chrome: {e}")
+            return {
+                'valid': False,
+                'screenshot': None,
+                'message': f"Chrome initialization failed: {str(e)[:100]}",
+                'url': None
+            }
+
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
         # Go to Instagram
