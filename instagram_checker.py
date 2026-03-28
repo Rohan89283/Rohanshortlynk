@@ -704,72 +704,59 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         if update_callback:
                             await update_callback(3, "Looking for second 'Continue' button...")
 
-                        logger.info("Searching for second 'Continue' button in 'Connect a Meta ad account' popup...")
+                        logger.info("Searching for second 'Continue' button (FIXED VERSION - targeting dialog)...")
                         try:
-                            # Wait a bit for the second popup to appear
+                            # Wait for the dialog popup to appear (VERY IMPORTANT)
                             time.sleep(2)
 
-                            # Try multiple selectors for the second "Continue" button - VERY SPECIFIC for the blue button
-                            continue_selectors_2 = [
-                                # Most specific - target the exact div structure from the HTML
-                                "//div[contains(@class, 'x6s0dn4') and contains(@class, 'x78zum5')]//div[contains(@class, 'x1vvvo52') and contains(text(), 'Continue')]",
-                                "//div[contains(@class, 'x1vvvo52') and contains(@class, 'x1fvot60') and contains(@class, 'xk50ysn') and contains(text(), 'Continue')]",
-                                # Try the parent clickable div
-                                "//div[contains(@class, 'x6s0dn4') and contains(@class, 'x78zum5') and .//div[contains(text(), 'Continue')]]",
-                                # Try by class combinations
-                                "//div[contains(@class, 'xk50ysn') and contains(@class, 'xxio538') and contains(., 'Continue')]",
-                                "//div[contains(@class, 'x1heor9g') and contains(@class, 'xuxw1ft') and contains(., 'Continue')]",
-                                # General selectors
-                                "//div[contains(@class, 'x1vvvo52') and contains(., 'Continue')]",
-                                "//div[contains(@class, 'x1fvot60') and contains(., 'Continue')]",
-                                "//span[contains(text(), 'Continue')]",
-                                "//div[contains(text(), 'Continue')]",
-                                "//button[contains(., 'Continue')]",
-                                "//*[contains(text(), 'Continue')]",
-                            ]
+                            try:
+                                WebDriverWait(driver, 10).until(
+                                    EC.presence_of_element_located((By.XPATH, "//div[@role='dialog']"))
+                                )
+                                logger.info("✓ Found dialog popup container")
+                            except:
+                                logger.warning("⚠️ Dialog popup not found, trying alternative selectors...")
 
-                            for selector in continue_selectors_2:
+                            # Get ALL visible Continue buttons inside the dialog
+                            buttons = driver.find_elements(By.XPATH, "//div[@role='dialog']//span[text()='Continue']")
+
+                            if not buttons:
+                                # Fallback: try without dialog constraint
+                                buttons = driver.find_elements(By.XPATH, "//span[text()='Continue']")
+
+                            logger.info(f"Found {len(buttons)} 'Continue' button(s) inside popup")
+
+                            for idx, btn in enumerate(buttons):
                                 try:
-                                    continue_button_2 = WebDriverWait(driver, 10).until(
-                                        EC.element_to_be_clickable((By.XPATH, selector))
-                                    )
-                                    logger.info(f"✓ Found second 'Continue' button using selector: {selector}")
+                                    if btn.is_displayed():
+                                        logger.info(f"Attempting to click Continue button #{idx + 1}")
 
-                                    # Scroll to button if needed
-                                    try:
-                                        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", continue_button_2)
+                                        # Scroll button into view
+                                        driver.execute_script("arguments[0].scrollIntoView(true);", btn)
                                         time.sleep(1)
-                                    except:
-                                        pass
 
-                                    # Try clicking with JavaScript as backup
-                                    try:
-                                        continue_button_2.click()
-                                        logger.info("✓ Clicked second 'Continue' button (normal click)")
-                                    except Exception as click_error:
-                                        logger.warning(f"Normal click failed, trying JavaScript click: {click_error}")
-                                        driver.execute_script("arguments[0].click();", continue_button_2)
-                                        logger.info("✓ Clicked second 'Continue' button (JavaScript click)")
+                                        # Use JavaScript click (more reliable for overlays)
+                                        driver.execute_script("arguments[0].click();", btn)
 
-                                    continue_clicked_2 = True
-                                    logger.info("✓✓✓ SECOND 'CONTINUE' BUTTON CLICKED SUCCESSFULLY ✓✓✓")
+                                        continue_clicked_2 = True
+                                        logger.info(f"✅✅✅ CLICKED SECOND 'Continue' BUTTON #{idx + 1} SUCCESSFULLY ✅✅✅")
 
-                                    if update_callback:
-                                        await update_callback(3, "✓ Clicked second 'Continue', checking for popup tab...")
+                                        if update_callback:
+                                            await update_callback(3, "✓ Clicked second 'Continue', checking for popup tab...")
 
-                                    # Wait after click to see if popup tab opens
-                                    time.sleep(3)
-                                    break
+                                        # Wait after click to see if popup tab opens
+                                        time.sleep(3)
+                                        break
                                 except Exception as e:
-                                    logger.debug(f"Selector {selector} did not work: {e}")
+                                    logger.debug(f"Button #{idx + 1} failed: {e}")
                                     continue
 
                             if not continue_clicked_2:
-                                logger.warning("⚠️ WARNING: No second 'Continue' button found - this is critical!")
-                                logger.warning("⚠️ The 'Connect a Meta ad account' popup may not have appeared")
+                                logger.error("❌ Could NOT click second Continue button - CRITICAL!")
+                                logger.error("❌ The popup tab will NOT open without this click!")
 
                         except Exception as e:
-                            logger.error(f"❌ CRITICAL ERROR: Failed to click second 'Continue' button: {e}")
+                            logger.error(f"❌ CRITICAL ERROR: Failed to find/click second 'Continue' button: {e}")
                             logger.error("❌ This will prevent the popup tab from opening")
 
                         # Check if a popup tab opened after second Continue
