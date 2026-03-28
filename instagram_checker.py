@@ -704,55 +704,113 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         if update_callback:
                             await update_callback(3, "Looking for second 'Continue' button...")
 
-                        logger.info("Searching for second 'Continue' button (FIXED VERSION - targeting dialog)...")
+                        logger.info("🔍 COMPREHENSIVE SEARCH for second 'Continue' button in ALL contexts...")
+
+                        def find_continue_buttons_everywhere(driver):
+                            """Search for Continue buttons in main page, iframes, dialogs, popups"""
+                            all_buttons = []
+
+                            # 1. Search in MAIN PAGE first
+                            logger.info("🔍 Searching in MAIN PAGE...")
+                            try:
+                                # Target the exact div structure you provided
+                                main_buttons = driver.find_elements(By.XPATH,
+                                    "//div[contains(@class, 'x1vvvo52') and contains(@class, 'x1fvot60') and contains(@class, 'xk50ysn') and contains(text(), 'Continue')]"
+                                )
+                                if main_buttons:
+                                    logger.info(f"✓ Found {len(main_buttons)} Continue button(s) in MAIN PAGE (exact class match)")
+                                    all_buttons.extend([('main_exact', btn) for btn in main_buttons])
+
+                                # Also try broader selectors
+                                main_buttons_2 = driver.find_elements(By.XPATH, "//div[contains(text(), 'Continue')]")
+                                if main_buttons_2:
+                                    logger.info(f"✓ Found {len(main_buttons_2)} Continue button(s) in MAIN PAGE (broad match)")
+                                    all_buttons.extend([('main_broad', btn) for btn in main_buttons_2])
+                            except Exception as e:
+                                logger.debug(f"Main page search error: {e}")
+
+                            # 2. Search in DIALOGS
+                            logger.info("🔍 Searching in DIALOGS...")
+                            try:
+                                dialog_buttons = driver.find_elements(By.XPATH,
+                                    "//div[@role='dialog']//div[contains(@class, 'x1vvvo52') and contains(text(), 'Continue')]"
+                                )
+                                if dialog_buttons:
+                                    logger.info(f"✓ Found {len(dialog_buttons)} Continue button(s) in DIALOG")
+                                    all_buttons.extend([('dialog', btn) for btn in dialog_buttons])
+                            except Exception as e:
+                                logger.debug(f"Dialog search error: {e}")
+
+                            # 3. Search in ALL IFRAMES
+                            logger.info("🔍 Searching in IFRAMES...")
+                            try:
+                                iframes = driver.find_elements(By.TAG_NAME, "iframe")
+                                logger.info(f"Found {len(iframes)} iframe(s) on page")
+
+                                for iframe_idx, iframe in enumerate(iframes):
+                                    try:
+                                        driver.switch_to.frame(iframe)
+                                        logger.info(f"  Searching in iframe #{iframe_idx + 1}...")
+
+                                        iframe_buttons = driver.find_elements(By.XPATH,
+                                            "//div[contains(@class, 'x1vvvo52') and contains(text(), 'Continue')]"
+                                        )
+                                        if iframe_buttons:
+                                            logger.info(f"  ✓ Found {len(iframe_buttons)} Continue button(s) in iframe #{iframe_idx + 1}")
+                                            all_buttons.extend([(f'iframe_{iframe_idx}', btn) for btn in iframe_buttons])
+
+                                        driver.switch_to.default_content()
+                                    except Exception as e:
+                                        logger.debug(f"  Iframe #{iframe_idx + 1} error: {e}")
+                                        driver.switch_to.default_content()
+                            except Exception as e:
+                                logger.debug(f"Iframe search error: {e}")
+                                driver.switch_to.default_content()
+
+                            return all_buttons
+
                         try:
-                            # Wait for the dialog popup to appear (VERY IMPORTANT)
+                            # Wait for popup to stabilize
                             time.sleep(2)
 
-                            try:
-                                WebDriverWait(driver, 10).until(
-                                    EC.presence_of_element_located((By.XPATH, "//div[@role='dialog']"))
-                                )
-                                logger.info("✓ Found dialog popup container")
-                            except:
-                                logger.warning("⚠️ Dialog popup not found, trying alternative selectors...")
+                            # Find ALL Continue buttons everywhere
+                            all_continue_buttons = find_continue_buttons_everywhere(driver)
 
-                            # Get ALL visible Continue buttons inside the dialog
-                            buttons = driver.find_elements(By.XPATH, "//div[@role='dialog']//span[text()='Continue']")
+                            logger.info(f"📊 TOTAL Continue buttons found: {len(all_continue_buttons)}")
 
-                            if not buttons:
-                                # Fallback: try without dialog constraint
-                                buttons = driver.find_elements(By.XPATH, "//span[text()='Continue']")
-
-                            logger.info(f"Found {len(buttons)} 'Continue' button(s) inside popup")
-
-                            for idx, btn in enumerate(buttons):
+                            # Try to click each button (prioritize exact matches)
+                            for location, btn in all_continue_buttons:
                                 try:
                                     if btn.is_displayed():
-                                        logger.info(f"Attempting to click Continue button #{idx + 1}")
+                                        logger.info(f"🎯 Attempting to click Continue button from: {location}")
 
-                                        # Scroll button into view
+                                        # Scroll into view
                                         driver.execute_script("arguments[0].scrollIntoView(true);", btn)
-                                        time.sleep(1)
+                                        time.sleep(0.5)
 
-                                        # Use JavaScript click (more reliable for overlays)
+                                        # Get button text for logging
+                                        btn_text = btn.text
+                                        btn_classes = btn.get_attribute('class')
+                                        logger.info(f"   Button text: '{btn_text}' | Classes: {btn_classes[:100]}...")
+
+                                        # Use JavaScript click
                                         driver.execute_script("arguments[0].click();", btn)
 
                                         continue_clicked_2 = True
-                                        logger.info(f"✅✅✅ CLICKED SECOND 'Continue' BUTTON #{idx + 1} SUCCESSFULLY ✅✅✅")
+                                        logger.info(f"✅✅✅ CLICKED SECOND 'Continue' BUTTON from {location} ✅✅✅")
 
                                         if update_callback:
-                                            await update_callback(3, "✓ Clicked second 'Continue', checking for popup tab...")
+                                            await update_callback(3, f"✓ Clicked second 'Continue' from {location}...")
 
-                                        # Wait after click to see if popup tab opens
+                                        # Wait after click
                                         time.sleep(3)
                                         break
                                 except Exception as e:
-                                    logger.debug(f"Button #{idx + 1} failed: {e}")
+                                    logger.debug(f"Button from {location} failed: {e}")
                                     continue
 
                             if not continue_clicked_2:
-                                logger.error("❌ Could NOT click second Continue button - CRITICAL!")
+                                logger.error("❌ Could NOT click second Continue button - tried ALL locations!")
                                 logger.error("❌ The popup tab will NOT open without this click!")
 
                         except Exception as e:
