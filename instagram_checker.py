@@ -747,11 +747,11 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         except Exception as e:
                             logger.warning(f"Failed to click second 'Continue' button in popup: {e}")
 
-                        # NOW check for new tab/popup that opens after clicking 2nd Continue
+                        # NOW check for popup tab that opens after clicking 2nd Continue
                         if update_callback:
-                            await update_callback(3, "Checking for new tab after 2nd Continue...")
+                            await update_callback(3, "Checking for popup tab after 2nd Continue...")
 
-                        logger.info("Checking for new tab after second 'Continue' click...")
+                        logger.info("Checking for popup tab after second 'Continue' click...")
                         time.sleep(2)
 
                         try:
@@ -760,68 +760,86 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                             if len(windows_after_continue2) > 1:
                                 popup_after_continue2 = True
-                                logger.info("✓ New tab opened after 2nd Continue!")
+                                logger.info("✓ Popup tab opened after 2nd Continue!")
 
                                 if update_callback:
-                                    await update_callback(3, "New tab detected, handling login...")
+                                    await update_callback(3, "Popup tab detected, clicking 'Continue as username'...")
 
-                                # Store current window
-                                current_window = driver.current_window_handle
+                                # Store main window
+                                main_window = driver.current_window_handle
 
-                                # Switch to the NEW TAB
+                                # Switch to the POPUP TAB
                                 for window in windows_after_continue2:
-                                    if window != current_window:
+                                    if window != main_window:
                                         driver.switch_to.window(window)
-                                        new_tab_url = driver.current_url
-                                        logger.info(f"Switched to new tab. URL: {new_tab_url}")
+                                        popup_tab_url = driver.current_url
+                                        logger.info(f"Switched to popup tab. URL: {popup_tab_url}")
                                         break
 
-                                # Wait for new tab content to load
+                                # Wait for popup tab content to load
                                 time.sleep(3)
 
-                                # Try to click "Log in as username" button in the new tab
-                                logger.info("Searching for 'Log in as' button in new tab...")
+                                # Try to click "Continue as username" button in the popup tab
+                                logger.info("Searching for 'Continue as username' button in popup tab...")
                                 try:
-                                    login_as_selectors = [
-                                        "//button[contains(., 'Log in as')]",
-                                        "//span[contains(text(), 'Log in as')]",
-                                        "//div[contains(text(), 'Log in as')]",
-                                        "//*[contains(text(), 'Log in as')]",
+                                    # Multiple selectors for the "Continue as [username]" button
+                                    continue_as_selectors = [
+                                        "//button[@name='__CONFIRM__']",
+                                        "//button[@value='1']",
+                                        "//button[contains(@class, 'layerConfirm')]",
+                                        "//button[contains(., 'চালিয়ে যান')]",  # Bengali text
+                                        "//button[contains(., 'Continue as')]",
+                                        "//button[contains(., 'হিসাবে')]",
+                                        "//*[contains(text(), 'চালিয়ে যান')]",
+                                        "//*[contains(text(), 'Continue as')]",
                                     ]
 
-                                    for selector in login_as_selectors:
+                                    for selector in continue_as_selectors:
                                         try:
-                                            login_as_button = WebDriverWait(driver, 5).until(
+                                            continue_as_button = WebDriverWait(driver, 5).until(
                                                 EC.element_to_be_clickable((By.XPATH, selector))
                                             )
-                                            logger.info(f"Found 'Log in as' button using selector: {selector}")
-                                            login_as_button.click()
+                                            logger.info(f"Found 'Continue as username' button using selector: {selector}")
+                                            continue_as_button.click()
                                             login_clicked_after_continue2 = True
-                                            logger.info("✓ Clicked 'Log in as' button in new tab")
+                                            logger.info("✓ Clicked 'Continue as username' button in popup tab")
 
                                             if update_callback:
-                                                await update_callback(3, "Clicked 'Log in as', waiting for redirect...")
+                                                await update_callback(3, "Clicked 'Continue as', popup will close...")
 
-                                            time.sleep(5)
+                                            # Wait for popup to close
+                                            time.sleep(3)
                                             break
                                         except:
                                             continue
 
                                     if not login_clicked_after_continue2:
-                                        logger.info("No 'Log in as' button found - may auto-redirect")
+                                        logger.info("No 'Continue as username' button found - may auto-close")
 
                                 except Exception as e:
-                                    logger.info(f"No login button needed: {e}")
+                                    logger.info(f"No 'Continue as' button needed: {e}")
 
-                                # Stay in the new tab for screenshot
+                                # Switch back to main window (popup should close automatically)
+                                try:
+                                    driver.switch_to.window(main_window)
+                                    logger.info("✓ Switched back to main window")
+                                except:
+                                    # If main window is gone, switch to first available
+                                    available_windows = driver.window_handles
+                                    if available_windows:
+                                        driver.switch_to.window(available_windows[0])
+                                        logger.info("✓ Switched to available window")
+
+                                # Wait for page to fully load in main window after popup closes
+                                time.sleep(3)
                                 ad_center_final_url = driver.current_url
-                                logger.info(f"Final URL in new tab: {ad_center_final_url}")
+                                logger.info(f"Final URL in main window: {ad_center_final_url}")
                             else:
-                                logger.info("No new tab detected after 2nd Continue")
+                                logger.info("No popup tab detected after 2nd Continue")
                                 ad_center_final_url = driver.current_url
 
                         except Exception as e:
-                            logger.warning(f"Error checking for new tab after 2nd Continue: {e}")
+                            logger.warning(f"Error checking for popup tab after 2nd Continue: {e}")
                             ad_center_final_url = driver.current_url
 
                         # Take screenshot at END of Step 3
