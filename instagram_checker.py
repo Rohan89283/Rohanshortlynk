@@ -839,91 +839,91 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                     # Step 3: Navigate to Facebook Ad Center
                     if False:  # Disabled
                         try:
-                        logger.info("Starting Step 3 - Facebook Ad Center...")
-                        if update_callback:
-                            await update_callback(3, "Navigating to Ad Center...")
+                            logger.info("Starting Step 3 - Facebook Ad Center...")
+                            if update_callback:
+                                await update_callback(3, "Navigating to Ad Center...")
 
-                        # Navigate to Facebook Ad Center with English locale
-                        logger.info("Navigating to Facebook Ad Center...")
-                        driver.get('https://business.facebook.com/latest/ad_center/ads_summary?locale=en_US')
+                            # Navigate to Facebook Ad Center with English locale
+                            logger.info("Navigating to Facebook Ad Center...")
+                            driver.get('https://business.facebook.com/latest/ad_center/ads_summary?locale=en_US')
 
-                        # Wait for page to be fully loaded
-                        WebDriverWait(driver, 10).until(
-                            lambda d: d.execute_script('return document.readyState') == 'complete'
-                        )
+                            # Wait for page to be fully loaded
+                            WebDriverWait(driver, 10).until(
+                                lambda d: d.execute_script('return document.readyState') == 'complete'
+                            )
 
-                        # Force English language again
-                        driver.execute_script("""
-                            Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
-                            Object.defineProperty(navigator, 'language', {get: () => 'en-US'});
+                            # Force English language again
+                            driver.execute_script("""
+                                Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+                                Object.defineProperty(navigator, 'language', {get: () => 'en-US'});
 
-                            if (window.localStorage) {
-                                window.localStorage.setItem('locale', 'en_US');
-                            }
-                        """)
+                                if (window.localStorage) {
+                                    window.localStorage.setItem('locale', 'en_US');
+                                }
+                            """)
 
-                        if update_callback:
-                            await update_callback(3, "Loading Ad Center data...")
+                            if update_callback:
+                                await update_callback(3, "Loading Ad Center data...")
 
-                        # Wait for dynamic content to load (minimal wait)
-                        time.sleep(2)
+                            # Wait for dynamic content to load (minimal wait)
+                            time.sleep(2)
 
-                        current_url = driver.current_url
-                        logger.info(f"Current URL at Step 3: {current_url}")
+                            current_url = driver.current_url
+                            logger.info(f"Current URL at Step 3: {current_url}")
 
-                        # Check if we're actually on the Ad Center or still on login page
-                        if 'login' in current_url.lower() or 'get started' in driver.page_source.lower()[:5000]:
-                            logger.warning("Still on login page, attempting to click Instagram login again")
+                            # Check if we're actually on the Ad Center or still on login page
+                            if 'login' in current_url.lower() or 'get started' in driver.page_source.lower()[:5000]:
+                                logger.warning("Still on login page, attempting to click Instagram login again")
 
-                            # Try to click Instagram login button again
-                            try:
-                                elements = driver.find_elements(By.XPATH, "//a[contains(., 'Instagram')] | //button[contains(., 'Instagram')] | //div[contains(., 'Instagram')]")
-                                for element in elements:
-                                    if 'instagram' in element.text.lower():
-                                        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
-                                        time.sleep(0.3)
-                                        driver.execute_script("arguments[0].click();", element)
-                                        logger.info("Clicked Instagram login in Step 3")
+                                # Try to click Instagram login button again
+                                try:
+                                    elements = driver.find_elements(By.XPATH, "//a[contains(., 'Instagram')] | //button[contains(., 'Instagram')] | //div[contains(., 'Instagram')]")
+                                    for element in elements:
+                                        if 'instagram' in element.text.lower():
+                                            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
+                                            time.sleep(0.3)
+                                            driver.execute_script("arguments[0].click();", element)
+                                            logger.info("Clicked Instagram login in Step 3")
 
-                                        # Wait for redirect to business.facebook.com
-                                        try:
-                                            WebDriverWait(driver, 15).until(
-                                                lambda d: 'business.facebook.com' in d.current_url and 'login' not in d.current_url.lower()
+                                            # Wait for redirect to business.facebook.com
+                                            try:
+                                                WebDriverWait(driver, 15).until(
+                                                    lambda d: 'business.facebook.com' in d.current_url and 'login' not in d.current_url.lower()
+                                                )
+                                            except TimeoutException:
+                                                logger.warning("Timeout waiting for redirect")
+
+                                            WebDriverWait(driver, 10).until(
+                                                lambda d: d.execute_script('return document.readyState') == 'complete'
                                             )
-                                        except TimeoutException:
-                                            logger.warning("Timeout waiting for redirect")
 
-                                        WebDriverWait(driver, 10).until(
-                                            lambda d: d.execute_script('return document.readyState') == 'complete'
-                                        )
+                                            # Try navigating to Ad Center again
+                                            driver.get('https://business.facebook.com/latest/ad_center/ads_summary?locale=en_US')
+                                            WebDriverWait(driver, 10).until(
+                                                lambda d: d.execute_script('return document.readyState') == 'complete'
+                                            )
+                                            time.sleep(1.5)
+                                            break
+                                except Exception as e:
+                                    logger.warning(f"Failed to re-click Instagram login: {e}")
 
-                                        # Try navigating to Ad Center again
-                                        driver.get('https://business.facebook.com/latest/ad_center/ads_summary?locale=en_US')
-                                        WebDriverWait(driver, 10).until(
-                                            lambda d: d.execute_script('return document.readyState') == 'complete'
-                                        )
-                                        time.sleep(1.5)
-                                        break
-                            except Exception as e:
-                                logger.warning(f"Failed to re-click Instagram login: {e}")
+                            if update_callback:
+                                await update_callback(3, "Capturing screenshot...")
 
-                        if update_callback:
-                            await update_callback(3, "Capturing screenshot...")
+                            # Wait for page content to be fully rendered
+                            time.sleep(2)
 
-                        # Wait for page content to be fully rendered
-                        time.sleep(2)
+                            # Take screenshot for Step 3
+                            screenshot_step3 = driver.get_screenshot_as_png()
 
-                        # Take screenshot for Step 3
-                        screenshot_step3 = driver.get_screenshot_as_png()
+                            result['screenshot_step3'] = screenshot_step3
+                            result['step3_complete'] = True
 
-                        result['screenshot_step3'] = screenshot_step3
-                        result['step3_complete'] = True
+                            logger.info("Step 3 completed - Screenshot captured")
 
-                        logger.info("Step 3 completed - Screenshot captured")
-
-                    except Exception as e:
-                        logger.warning(f"Step 3 failed: {e}")
-                        result['step3_complete'] = False
+                        except Exception as e:
+                            logger.warning(f"Step 3 failed: {e}")
+                            result['step3_complete'] = False
 
                 except Exception as e:
                     logger.warning(f"Step 2 failed: {e}")
