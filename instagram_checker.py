@@ -690,29 +690,32 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         except Exception as e:
                             logger.warning(f"Failed to click first 'Continue' button: {e}")
 
-                        # Try to find and click second "Continue" button
+                        # Try to find and click second "Continue" button IN POPUP
                         continue_clicked_2 = False
+                        popup_after_continue2 = False
+                        login_clicked_after_continue2 = False
+
                         if update_callback:
-                            await update_callback(3, "Looking for second 'Continue' button...")
+                            await update_callback(3, "Looking for popup with 2nd Continue button...")
 
-                        logger.info("Searching for second 'Continue' button...")
-                        logger.info("Waiting longer for modal/dialog to appear...")
+                        logger.info("Searching for popup with second 'Continue' button...")
+                        logger.info("Waiting for popup/modal to appear...")
 
-                        # Give more time for the modal to appear
+                        # Give more time for the popup to appear after first continue
                         time.sleep(3)
 
                         try:
-                            # Try multiple selectors for the second "Continue" button with longer wait
-                            # First try with explicit wait for modal/dialog
+                            # The second Continue should be in a popup/modal/dialog
+                            # Try to find and click it within the current context
                             continue_button_found = False
 
                             for selector in continue_selectors:
                                 try:
-                                    # Increase wait time to 10 seconds for second continue button
+                                    # Wait for the second continue button in popup
                                     continue_button_2 = WebDriverWait(driver, 10).until(
                                         EC.element_to_be_clickable((By.XPATH, selector))
                                     )
-                                    logger.info(f"Found second 'Continue' button using selector: {selector}")
+                                    logger.info(f"Found second 'Continue' button in popup using selector: {selector}")
 
                                     # Scroll to button if needed
                                     try:
@@ -721,20 +724,16 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                     except:
                                         pass
 
-                                    # Click the button
+                                    # Click the button - this should trigger a new tab
                                     continue_button_2.click()
                                     continue_clicked_2 = True
-                                    logger.info("✓ Clicked second 'Continue' button")
+                                    logger.info("✓ Clicked second 'Continue' button in popup")
 
                                     if update_callback:
-                                        await update_callback(3, "Clicked second 'Continue', waiting for page...")
+                                        await update_callback(3, "Clicked 2nd Continue, checking for new tab...")
 
-                                    # Wait for page to load after click
+                                    # Wait for new tab to open
                                     time.sleep(5)
-
-                                    # Update URL after click
-                                    ad_center_final_url = driver.current_url
-                                    logger.info(f"URL after second 'Continue' click: {ad_center_final_url}")
 
                                     continue_button_found = True
                                     break
@@ -743,19 +742,16 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                     continue
 
                             if not continue_button_found:
-                                logger.info("No second 'Continue' button found - may already be past that screen")
+                                logger.info("No second 'Continue' button found in popup")
 
                         except Exception as e:
-                            logger.warning(f"Failed to click second 'Continue' button: {e}")
+                            logger.warning(f"Failed to click second 'Continue' button in popup: {e}")
 
-                        # Check for new tab/popup after second Continue click
-                        popup_after_continue2 = False
-                        login_clicked_after_continue2 = False
-
+                        # NOW check for new tab/popup that opens after clicking 2nd Continue
                         if update_callback:
-                            await update_callback(3, "Checking for popup after 2nd Continue...")
+                            await update_callback(3, "Checking for new tab after 2nd Continue...")
 
-                        logger.info("Checking for new tab/popup after second 'Continue' click...")
+                        logger.info("Checking for new tab after second 'Continue' click...")
                         time.sleep(2)
 
                         try:
@@ -764,27 +760,27 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                             if len(windows_after_continue2) > 1:
                                 popup_after_continue2 = True
-                                logger.info("✓ New tab/popup detected after 2nd Continue!")
+                                logger.info("✓ New tab opened after 2nd Continue!")
 
                                 if update_callback:
-                                    await update_callback(3, "Popup detected, handling login...")
+                                    await update_callback(3, "New tab detected, handling login...")
 
                                 # Store current window
                                 current_window = driver.current_window_handle
 
-                                # Switch to the new popup
+                                # Switch to the NEW TAB
                                 for window in windows_after_continue2:
                                     if window != current_window:
                                         driver.switch_to.window(window)
-                                        popup_url = driver.current_url
-                                        logger.info(f"Switched to popup. URL: {popup_url}")
+                                        new_tab_url = driver.current_url
+                                        logger.info(f"Switched to new tab. URL: {new_tab_url}")
                                         break
 
-                                # Wait for popup content
+                                # Wait for new tab content to load
                                 time.sleep(3)
 
-                                # Try to click "Log in as username" button
-                                logger.info("Searching for 'Log in as' button in popup...")
+                                # Try to click "Log in as username" button in the new tab
+                                logger.info("Searching for 'Log in as' button in new tab...")
                                 try:
                                     login_as_selectors = [
                                         "//button[contains(., 'Log in as')]",
@@ -801,8 +797,12 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                             logger.info(f"Found 'Log in as' button using selector: {selector}")
                                             login_as_button.click()
                                             login_clicked_after_continue2 = True
-                                            logger.info("✓ Clicked 'Log in as' button in popup")
-                                            time.sleep(3)
+                                            logger.info("✓ Clicked 'Log in as' button in new tab")
+
+                                            if update_callback:
+                                                await update_callback(3, "Clicked 'Log in as', waiting for redirect...")
+
+                                            time.sleep(5)
                                             break
                                         except:
                                             continue
@@ -813,25 +813,16 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                 except Exception as e:
                                     logger.info(f"No login button needed: {e}")
 
-                                # Switch back to main window
-                                try:
-                                    driver.switch_to.window(current_window)
-                                    logger.info("✓ Switched back to main window")
-                                except:
-                                    available_windows = driver.window_handles
-                                    if available_windows:
-                                        driver.switch_to.window(available_windows[0])
-                                        logger.info("✓ Switched to available window")
-
-                                # Wait for redirect to complete
-                                time.sleep(3)
+                                # Stay in the new tab for screenshot
                                 ad_center_final_url = driver.current_url
-                                logger.info(f"URL after popup handling: {ad_center_final_url}")
+                                logger.info(f"Final URL in new tab: {ad_center_final_url}")
                             else:
-                                logger.info("No new popup detected after 2nd Continue")
+                                logger.info("No new tab detected after 2nd Continue")
+                                ad_center_final_url = driver.current_url
 
                         except Exception as e:
-                            logger.warning(f"Error checking for popup after 2nd Continue: {e}")
+                            logger.warning(f"Error checking for new tab after 2nd Continue: {e}")
+                            ad_center_final_url = driver.current_url
 
                         # Take screenshot at END of Step 3
                         screenshot_step3 = driver.get_screenshot_as_png()
