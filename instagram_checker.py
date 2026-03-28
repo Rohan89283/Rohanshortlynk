@@ -759,6 +759,8 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                         # Check if a popup tab opened after second Continue
                         screenshot_step3 = None
+                        continue_as_clicked = False
+
                         if continue_clicked_2:
                             logger.info("Checking for popup tab after second 'Continue' click...")
                             try:
@@ -770,12 +772,12 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                     logger.info("✓ Popup tab opened!")
 
                                     if update_callback:
-                                        await update_callback(3, "Popup tab detected, taking screenshot...")
+                                        await update_callback(3, "Popup tab detected, looking for 'Continue as' button...")
 
                                     # Store main window
                                     main_window = driver.current_window_handle
 
-                                    # Switch to popup tab to take screenshot
+                                    # Switch to popup tab
                                     for window in current_windows:
                                         if window != main_window:
                                             driver.switch_to.window(window)
@@ -785,9 +787,57 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                             # Wait for popup content to load
                                             time.sleep(2)
 
-                                            # Take screenshot of popup
+                                            # Try to find and click "Continue as [username]" button
+                                            logger.info("Searching for 'Continue as' button in popup...")
+                                            try:
+                                                # Try multiple selectors for the "Continue as" button
+                                                continue_as_selectors = [
+                                                    "//button[@name='__CONFIRM__' and contains(@class, 'layerConfirm')]",
+                                                    "//button[@name='__CONFIRM__']",
+                                                    "//button[contains(@class, 'layerConfirm')]",
+                                                    "//button[contains(., 'Continue as')]",
+                                                    "//button[@type='submit' and contains(@class, '_42ft')]",
+                                                    "//button[@value='1' and @name='__CONFIRM__']",
+                                                ]
+
+                                                for selector in continue_as_selectors:
+                                                    try:
+                                                        continue_as_button = WebDriverWait(driver, 10).until(
+                                                            EC.element_to_be_clickable((By.XPATH, selector))
+                                                        )
+                                                        logger.info(f"Found 'Continue as' button using selector: {selector}")
+
+                                                        # Scroll to button if needed
+                                                        try:
+                                                            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", continue_as_button)
+                                                            time.sleep(1)
+                                                        except:
+                                                            pass
+
+                                                        # Click the button
+                                                        continue_as_button.click()
+                                                        continue_as_clicked = True
+                                                        logger.info("✓ Clicked 'Continue as' button in popup")
+
+                                                        if update_callback:
+                                                            await update_callback(3, "Clicked 'Continue as', waiting for redirect...")
+
+                                                        # Wait after click
+                                                        time.sleep(3)
+                                                        break
+                                                    except Exception as e:
+                                                        logger.debug(f"Selector {selector} did not work: {e}")
+                                                        continue
+
+                                                if not continue_as_clicked:
+                                                    logger.info("No 'Continue as' button found in popup")
+
+                                            except Exception as e:
+                                                logger.warning(f"Failed to click 'Continue as' button: {e}")
+
+                                            # Take screenshot after clicking (or if button not found)
                                             screenshot_step3 = driver.get_screenshot_as_png()
-                                            logger.info("✓ Step 3 screenshot captured (popup tab)")
+                                            logger.info("✓ Step 3 screenshot captured (popup tab after 'Continue as' click)")
 
                                             # Close popup tab
                                             driver.close()
@@ -819,6 +869,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         logger.info(f"First Continue clicked: {continue_clicked}")
                         logger.info(f"Second Continue clicked: {continue_clicked_2}")
                         logger.info(f"Popup tab opened: {popup_opened}")
+                        logger.info(f"'Continue as' clicked: {continue_as_clicked}")
                         logger.info("=" * 80)
 
                         # Update result with step 3 data
@@ -830,6 +881,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         result['step3_continue_clicked'] = continue_clicked
                         result['step3_continue_clicked_2'] = continue_clicked_2
                         result['step3_popup_opened'] = popup_opened
+                        result['step3_continue_as_clicked'] = continue_as_clicked
 
                     except Exception as e:
                         logger.error(f"Step 3 failed: {e}", exc_info=True)
