@@ -696,14 +696,30 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                             await update_callback(3, "Looking for second 'Continue' button...")
 
                         logger.info("Searching for second 'Continue' button...")
+                        logger.info("Waiting longer for modal/dialog to appear...")
+
+                        # Give more time for the modal to appear
+                        time.sleep(3)
+
                         try:
-                            # Try multiple selectors for the second "Continue" button
+                            # Try multiple selectors for the second "Continue" button with longer wait
+                            # First try with explicit wait for modal/dialog
+                            continue_button_found = False
+
                             for selector in continue_selectors:
                                 try:
-                                    continue_button_2 = WebDriverWait(driver, 5).until(
+                                    # Increase wait time to 10 seconds for second continue button
+                                    continue_button_2 = WebDriverWait(driver, 10).until(
                                         EC.element_to_be_clickable((By.XPATH, selector))
                                     )
                                     logger.info(f"Found second 'Continue' button using selector: {selector}")
+
+                                    # Scroll to button if needed
+                                    try:
+                                        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", continue_button_2)
+                                        time.sleep(1)
+                                    except:
+                                        pass
 
                                     # Click the button
                                     continue_button_2.click()
@@ -720,12 +736,13 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                     ad_center_final_url = driver.current_url
                                     logger.info(f"URL after second 'Continue' click: {ad_center_final_url}")
 
+                                    continue_button_found = True
                                     break
                                 except Exception as e:
                                     logger.debug(f"Selector {selector} did not work: {e}")
                                     continue
 
-                            if not continue_clicked_2:
+                            if not continue_button_found:
                                 logger.info("No second 'Continue' button found - may already be past that screen")
 
                         except Exception as e:
