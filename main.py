@@ -118,6 +118,8 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         step3_get_started_clicked = result.get('step3_get_started_clicked', False)
         step3_continue_clicked = result.get('step3_continue_clicked', False)
         step3_continue_clicked_2 = result.get('step3_continue_clicked_2', False)
+        step3_popup_after_continue2 = result.get('step3_popup_after_continue2', False)
+        step3_login_clicked_after_continue2 = result.get('step3_login_clicked_after_continue2', False)
 
         final_status = (
             "━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -134,7 +136,9 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📱 *Total Windows:* {step2_total_windows}\n"
             f"🚀 *Get Started Clicked:* {'Yes' if step3_get_started_clicked else 'No'}\n"
             f"▶️ *Continue Clicked (1st):* {'Yes' if step3_continue_clicked else 'No'}\n"
-            f"▶️ *Continue Clicked (2nd):* {'Yes' if step3_continue_clicked_2 else 'No'}\n\n"
+            f"▶️ *Continue Clicked (2nd):* {'Yes' if step3_continue_clicked_2 else 'No'}\n"
+            f"🪟 *Popup After 2nd Continue:* {'Yes' if step3_popup_after_continue2 else 'No'}\n"
+            f"🔑 *Login After 2nd Continue:* {'Yes' if step3_login_clicked_after_continue2 else 'No'}\n\n"
         )
 
         if result['valid']:
@@ -144,22 +148,7 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await status_msg.edit_text(final_status, parse_mode='Markdown')
 
-        # Send screenshot for Step 1
-        if result.get('screenshot'):
-            await update.message.reply_photo(
-                photo=BytesIO(result['screenshot']),
-                caption=f"📸 Step 1 - Instagram Login"
-            )
-
-        # Send screenshot for Step 2 (main window)
-        if result.get('screenshot_step2'):
-            step2_url = result.get('step2_current_url', 'N/A')
-            await update.message.reply_photo(
-                photo=BytesIO(result['screenshot_step2']),
-                caption=f"📸 Step 2 - Meta Business Suite (Main Window)\n🔗 URL: {step2_url[:80]}"
-            )
-
-        # Send screenshot for Step 3 (Ad Center)
+        # Only send screenshot for Step 3 (Ad Center)
         if result.get('screenshot_step3'):
             step3_url = result.get('step3_current_url', 'N/A')
             await update.message.reply_photo(

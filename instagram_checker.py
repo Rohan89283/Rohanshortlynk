@@ -748,6 +748,91 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         except Exception as e:
                             logger.warning(f"Failed to click second 'Continue' button: {e}")
 
+                        # Check for new tab/popup after second Continue click
+                        popup_after_continue2 = False
+                        login_clicked_after_continue2 = False
+
+                        if update_callback:
+                            await update_callback(3, "Checking for popup after 2nd Continue...")
+
+                        logger.info("Checking for new tab/popup after second 'Continue' click...")
+                        time.sleep(2)
+
+                        try:
+                            windows_after_continue2 = driver.window_handles
+                            logger.info(f"Window handles after 2nd Continue: {len(windows_after_continue2)}")
+
+                            if len(windows_after_continue2) > 1:
+                                popup_after_continue2 = True
+                                logger.info("✓ New tab/popup detected after 2nd Continue!")
+
+                                if update_callback:
+                                    await update_callback(3, "Popup detected, handling login...")
+
+                                # Store current window
+                                current_window = driver.current_window_handle
+
+                                # Switch to the new popup
+                                for window in windows_after_continue2:
+                                    if window != current_window:
+                                        driver.switch_to.window(window)
+                                        popup_url = driver.current_url
+                                        logger.info(f"Switched to popup. URL: {popup_url}")
+                                        break
+
+                                # Wait for popup content
+                                time.sleep(3)
+
+                                # Try to click "Log in as username" button
+                                logger.info("Searching for 'Log in as' button in popup...")
+                                try:
+                                    login_as_selectors = [
+                                        "//button[contains(., 'Log in as')]",
+                                        "//span[contains(text(), 'Log in as')]",
+                                        "//div[contains(text(), 'Log in as')]",
+                                        "//*[contains(text(), 'Log in as')]",
+                                    ]
+
+                                    for selector in login_as_selectors:
+                                        try:
+                                            login_as_button = WebDriverWait(driver, 5).until(
+                                                EC.element_to_be_clickable((By.XPATH, selector))
+                                            )
+                                            logger.info(f"Found 'Log in as' button using selector: {selector}")
+                                            login_as_button.click()
+                                            login_clicked_after_continue2 = True
+                                            logger.info("✓ Clicked 'Log in as' button in popup")
+                                            time.sleep(3)
+                                            break
+                                        except:
+                                            continue
+
+                                    if not login_clicked_after_continue2:
+                                        logger.info("No 'Log in as' button found - may auto-redirect")
+
+                                except Exception as e:
+                                    logger.info(f"No login button needed: {e}")
+
+                                # Switch back to main window
+                                try:
+                                    driver.switch_to.window(current_window)
+                                    logger.info("✓ Switched back to main window")
+                                except:
+                                    available_windows = driver.window_handles
+                                    if available_windows:
+                                        driver.switch_to.window(available_windows[0])
+                                        logger.info("✓ Switched to available window")
+
+                                # Wait for redirect to complete
+                                time.sleep(3)
+                                ad_center_final_url = driver.current_url
+                                logger.info(f"URL after popup handling: {ad_center_final_url}")
+                            else:
+                                logger.info("No new popup detected after 2nd Continue")
+
+                        except Exception as e:
+                            logger.warning(f"Error checking for popup after 2nd Continue: {e}")
+
                         # Take screenshot at END of Step 3
                         screenshot_step3 = driver.get_screenshot_as_png()
                         logger.info("✓ Step 3 screenshot captured (Ad Center page after second Continue)")
@@ -758,6 +843,8 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         logger.info(f"Get started clicked: {get_started_clicked}")
                         logger.info(f"Continue clicked (1st): {continue_clicked}")
                         logger.info(f"Continue clicked (2nd): {continue_clicked_2}")
+                        logger.info(f"Popup after 2nd Continue: {popup_after_continue2}")
+                        logger.info(f"Login clicked after 2nd Continue: {login_clicked_after_continue2}")
                         logger.info("=" * 80)
 
                         # Update result with step 3 data
@@ -768,6 +855,8 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         result['step3_get_started_clicked'] = get_started_clicked
                         result['step3_continue_clicked'] = continue_clicked
                         result['step3_continue_clicked_2'] = continue_clicked_2
+                        result['step3_popup_after_continue2'] = popup_after_continue2
+                        result['step3_login_clicked_after_continue2'] = login_clicked_after_continue2
 
                     except Exception as e:
                         logger.error(f"Step 3 failed: {e}", exc_info=True)
