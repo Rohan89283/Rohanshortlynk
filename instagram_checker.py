@@ -276,73 +276,99 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         if update_callback:
                             await update_callback(2, "Looking for Instagram login...")
 
-                        # Wait for the login page to appear (reduced timeout)
-                        WebDriverWait(driver, 5).until(
+                        # Wait for the login page to appear
+                        WebDriverWait(driver, 8).until(
                             lambda d: d.execute_script('return document.readyState') == 'complete'
                         )
+                        time.sleep(2)
 
                         # Look for Instagram login button - try multiple selectors
                         instagram_login_clicked = False
 
-                        # Method 1: Try finding by text in all clickable elements
+                        # Method 1: Try finding by text in all clickable elements (a, button, div with role)
                         try:
-                            all_elements = driver.find_elements(By.XPATH, "//*[contains(text(), 'Instagram') or contains(text(), 'instagram')]")
+                            all_elements = driver.find_elements(By.XPATH, "//a[contains(., 'Instagram')] | //button[contains(., 'Instagram')] | //div[@role='button' and contains(., 'Instagram')]")
                             for element in all_elements:
-                                if 'log in' in element.text.lower() or 'login' in element.text.lower():
-                                    driver.execute_script("arguments[0].scrollIntoView(true);", element)
-                                    time.sleep(0.1)
-                                    driver.execute_script("arguments[0].click();", element)
-                                    instagram_login_clicked = True
-                                    logger.info(f"Clicked Instagram login using XPath: {element.text}")
-                                    break
+                                text = element.text.lower()
+                                if 'log in' in text or 'login' in text or 'instagram' in text:
+                                    try:
+                                        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
+                                        time.sleep(0.3)
+                                        driver.execute_script("arguments[0].click();", element)
+                                        instagram_login_clicked = True
+                                        logger.info(f"Clicked Instagram login using XPath: {element.text}")
+                                        break
+                                    except:
+                                        continue
                         except Exception as e:
                             logger.warning(f"Method 1 failed: {e}")
 
-                        # Method 2: Try finding button elements
+                        # Method 2: Try finding any element with aria-label containing Instagram
                         if not instagram_login_clicked:
                             try:
-                                buttons = driver.find_elements(By.TAG_NAME, 'button')
-                                for button in buttons:
-                                    if 'instagram' in button.text.lower():
-                                        driver.execute_script("arguments[0].scrollIntoView(true);", button)
-                                        time.sleep(0.1)
-                                        driver.execute_script("arguments[0].click();", button)
+                                elements = driver.find_elements(By.XPATH, "//*[contains(@aria-label, 'Instagram') or contains(@aria-label, 'instagram')]")
+                                for element in elements:
+                                    try:
+                                        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
+                                        time.sleep(0.3)
+                                        driver.execute_script("arguments[0].click();", element)
                                         instagram_login_clicked = True
-                                        logger.info(f"Clicked Instagram login button: {button.text}")
+                                        logger.info(f"Clicked Instagram login via aria-label")
                                         break
+                                    except:
+                                        continue
                             except Exception as e:
                                 logger.warning(f"Method 2 failed: {e}")
 
-                        # Method 3: Try finding by div/span with Instagram text
+                        # Method 3: Find all clickable elements and check text
                         if not instagram_login_clicked:
                             try:
-                                clickable_elements = driver.find_elements(By.CSS_SELECTOR, "div[role='button'], span[role='button'], div[tabindex='0']")
+                                clickable_elements = driver.find_elements(By.CSS_SELECTOR, "a, button, div[role='button'], span[role='button']")
                                 for element in clickable_elements:
-                                    if 'instagram' in element.text.lower():
-                                        driver.execute_script("arguments[0].scrollIntoView(true);", element)
-                                        time.sleep(0.1)
-                                        driver.execute_script("arguments[0].click();", element)
-                                        instagram_login_clicked = True
-                                        logger.info(f"Clicked Instagram login element: {element.text}")
-                                        break
+                                    try:
+                                        if 'instagram' in element.text.lower():
+                                            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
+                                            time.sleep(0.3)
+                                            driver.execute_script("arguments[0].click();", element)
+                                            instagram_login_clicked = True
+                                            logger.info(f"Clicked Instagram login element: {element.text}")
+                                            break
+                                    except:
+                                        continue
                             except Exception as e:
                                 logger.warning(f"Method 3 failed: {e}")
 
-                        # If clicked, wait for redirect and page load
+                        # If clicked, wait for Instagram OAuth and redirect back
                         if instagram_login_clicked:
                             if update_callback:
                                 await update_callback(2, "Logging in with Instagram...")
-                            logger.info("Instagram login button clicked! Waiting for page to load...")
-                            time.sleep(1.5)
+                            logger.info("Instagram login button clicked! Waiting for OAuth flow...")
 
-                            WebDriverWait(driver, 5).until(
+                            # Wait for potential Instagram OAuth redirect
+                            time.sleep(3)
+
+                            # Wait for page to complete loading
+                            WebDriverWait(driver, 10).until(
                                 lambda d: d.execute_script('return document.readyState') == 'complete'
                             )
 
-                            time.sleep(0.5)
-                            logger.info(f"Current URL after click: {driver.current_url}")
+                            # Additional wait for redirect completion
+                            time.sleep(2)
+
+                            current_url = driver.current_url
+                            logger.info(f"Current URL after Instagram login: {current_url}")
+
+                            # Verify we're in business.facebook.com and not on login page
+                            if 'business.facebook.com' in current_url and 'login' not in current_url.lower():
+                                logger.info("Successfully logged into Business Manager")
+                            else:
+                                logger.warning(f"May still be on login page. URL: {current_url}")
                         else:
-                            logger.warning("Instagram login button not found")
+                            logger.warning("Instagram login button not found - checking if already logged in")
+                            # Check if we're already logged in
+                            current_url = driver.current_url
+                            if 'business.facebook.com' in current_url and 'login' not in current_url.lower():
+                                logger.info("Already logged into Business Manager")
 
                     except Exception as e:
                         logger.warning(f"Failed to click Instagram login: {e}")
@@ -360,8 +386,8 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         logger.info("Navigating to Facebook Ad Center...")
                         driver.get('https://business.facebook.com/latest/ad_center/ads_summary?locale=en_US')
 
-                        # Wait for page to fully load (minimized)
-                        time.sleep(2)
+                        # Wait for initial page load
+                        time.sleep(3)
 
                         # Force English language again
                         driver.execute_script("""
@@ -376,21 +402,54 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         if update_callback:
                             await update_callback(3, "Loading Ad Center data...")
 
-                        # Wait for page to be fully loaded (reduced timeout)
-                        WebDriverWait(driver, 6).until(
+                        # Wait for page to be fully loaded
+                        WebDriverWait(driver, 10).until(
                             lambda d: d.execute_script('return document.readyState') == 'complete'
                         )
 
-                        # Additional wait for dynamic content (minimized)
-                        time.sleep(1)
+                        # Additional wait for dynamic content to load
+                        time.sleep(3)
 
-                        logger.info(f"Current URL at Step 3: {driver.current_url}")
+                        current_url = driver.current_url
+                        logger.info(f"Current URL at Step 3: {current_url}")
+
+                        # Check if we're actually on the Ad Center or still on login page
+                        if 'login' in current_url.lower() or 'get started' in driver.page_source.lower()[:5000]:
+                            logger.warning("Still on login page, attempting to click Instagram login again")
+
+                            # Try to click Instagram login button again
+                            try:
+                                elements = driver.find_elements(By.XPATH, "//a[contains(., 'Instagram')] | //button[contains(., 'Instagram')] | //div[contains(., 'Instagram')]")
+                                for element in elements:
+                                    if 'instagram' in element.text.lower():
+                                        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
+                                        time.sleep(0.5)
+                                        driver.execute_script("arguments[0].click();", element)
+                                        logger.info("Clicked Instagram login in Step 3")
+
+                                        # Wait for OAuth and redirect
+                                        time.sleep(5)
+                                        WebDriverWait(driver, 10).until(
+                                            lambda d: d.execute_script('return document.readyState') == 'complete'
+                                        )
+                                        time.sleep(2)
+
+                                        # Try navigating to Ad Center again
+                                        driver.get('https://business.facebook.com/latest/ad_center/ads_summary?locale=en_US')
+                                        time.sleep(3)
+                                        WebDriverWait(driver, 10).until(
+                                            lambda d: d.execute_script('return document.readyState') == 'complete'
+                                        )
+                                        time.sleep(2)
+                                        break
+                            except Exception as e:
+                                logger.warning(f"Failed to re-click Instagram login: {e}")
 
                         if update_callback:
                             await update_callback(3, "Capturing screenshot...")
 
-                        # Wait 2 seconds before taking screenshot to ensure page is fully rendered
-                        time.sleep(2)
+                        # Wait additional time before screenshot to ensure page is fully rendered
+                        time.sleep(3)
 
                         # Take screenshot for Step 3
                         screenshot_step3 = driver.get_screenshot_as_png()
