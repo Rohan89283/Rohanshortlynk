@@ -290,14 +290,26 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                     except Exception as e:
                         logger.warning(f"Could not refresh locale cookie: {e}")
 
-                    # Wait for page to load
+                    # Wait for page to load and detect login buttons
                     logger.info("Waiting for page to load completely...")
                     WebDriverWait(driver, 4).until(
                         lambda d: d.execute_script('return document.readyState') == 'complete'
                     )
                     logger.info("✓ Page loaded")
-                    time.sleep(0.5)
-                    logger.info("✓ Additional wait complete")
+
+                    # Wait for interactive elements to appear (max 2s)
+                    for _ in range(20):
+                        try:
+                            # Check if Instagram login button or business home is visible
+                            if driver.find_elements(By.XPATH, "//span[contains(text(), 'Log in with Instagram')]") or \
+                               'business.facebook.com/latest' in driver.current_url:
+                                logger.info(f"✓ Page ready after {_ * 0.1:.1f}s")
+                                break
+                        except:
+                            pass
+                        await asyncio.sleep(0.1)
+                    else:
+                        logger.info("✓ Page load timeout - proceeding anyway")
 
                     # Log current URL
                     current_page_url = driver.current_url
@@ -366,14 +378,22 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         except Exception as e:
                             logger.warning(f"Failed to click Instagram login button: {e}")
 
-                        # Wait a moment for any popups/tabs to open
-                        time.sleep(0.8)
-
+                        # Wait for popup/tab to open with detection (max 3 seconds)
                         if update_callback:
-                            await update_callback(2, "Checking for popup/new tab...")
+                            await update_callback(2, "Detecting popup/new tab...")
 
-                        # Check for new windows/tabs
-                        windows_after = driver.window_handles
+                        windows_after = [original_window]
+                        start_time = asyncio.get_event_loop().time() if asyncio.get_event_loop().is_running() else None
+                        max_wait = 3
+
+                        # Poll for new window with quick intervals
+                        for _ in range(30):  # 30 * 0.1s = 3s max
+                            windows_after = driver.window_handles
+                            if len(windows_after) > 1:
+                                logger.info(f"✓ New window detected after {_ * 0.1:.1f}s")
+                                break
+                            await asyncio.sleep(0.1)
+
                         logger.info(f"Windows after click: {len(windows_after)}")
 
                         # Capture current URL and page info
@@ -406,10 +426,18 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                         if '/callback/' in popup_url or '/idtoken/' in popup_url:
                                             logger.info("✓ Popup is auto-login callback - will close automatically")
                                             if update_callback:
-                                                await update_callback(2, "Auto-login popup detected, waiting for redirect...")
+                                                await update_callback(2, "Auto-login popup detected, waiting for close...")
 
-                                            # Wait for auto-close
-                                            time.sleep(0.8)
+                                            # Wait for popup to auto-close (max 3s)
+                                            for _ in range(30):
+                                                if len(driver.window_handles) == 1:
+                                                    logger.info(f"✓ Popup auto-closed after {_ * 0.1:.1f}s")
+                                                    break
+                                                await asyncio.sleep(0.1)
+                                            else:
+                                                # Force close if still open
+                                                logger.info("⚠ Force closing popup after timeout")
+                                                driver.close()
                                         else:
                                             # Try to click "Log in as username" button
                                             if update_callback:
@@ -431,10 +459,24 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                                             EC.element_to_be_clickable((By.XPATH, selector))
                                                         )
                                                         logger.info(f"Found 'Log in as' button using selector: {selector}")
+                                                        # Store URL before click
+                                                        url_before_click = driver.current_url
                                                         login_as_button.click()
                                                         login_button_clicked = True
                                                         logger.info("✓ Clicked 'Log in as' button")
-                                                        time.sleep(0.8)
+
+                                                        # Wait for URL change or popup close (max 3s)
+                                                        for _ in range(30):
+                                                            try:
+                                                                current_popup_url = driver.current_url
+                                                                if current_popup_url != url_before_click or len(driver.window_handles) == 1:
+                                                                    logger.info(f"✓ Popup action detected after {_ * 0.1:.1f}s")
+                                                                    break
+                                                            except:
+                                                                # Popup closed
+                                                                logger.info(f"✓ Popup closed after {_ * 0.1:.1f}s")
+                                                                break
+                                                            await asyncio.sleep(0.1)
                                                         break
                                                     except:
                                                         continue
@@ -459,9 +501,14 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                             driver.switch_to.window(available_windows[0])
                                             logger.info("✓ Switched to available window")
 
-                                    # Wait for redirect to complete
-                                    time.sleep(0.8)
+                                    # Wait for redirect to complete by detecting business URL (max 3s)
                                     main_url_after_login = driver.current_url
+                                    for _ in range(30):
+                                        main_url_after_login = driver.current_url
+                                        if 'business.facebook.com' in main_url_after_login and ('/latest' in main_url_after_login or '?nav' in main_url_after_login):
+                                            logger.info(f"✓ Redirected to business home after {_ * 0.1:.1f}s")
+                                            break
+                                        await asyncio.sleep(0.1)
                                     logger.info(f"Main window URL after popup: {main_url_after_login}")
                                     break
                         else:
@@ -474,9 +521,14 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                 'flow_type': 'direct_no_popup'
                             }
 
-                            # Wait a bit for any redirect
-                            time.sleep(0.8)
+                            # Wait for redirect by detecting business URL (max 3s)
                             main_url_after_login = driver.current_url
+                            for _ in range(30):
+                                main_url_after_login = driver.current_url
+                                if 'business.facebook.com' in main_url_after_login and ('/latest' in main_url_after_login or '?nav' in main_url_after_login):
+                                    logger.info(f"✓ Redirected to business home after {_ * 0.1:.1f}s")
+                                    break
+                                await asyncio.sleep(0.1)
                             logger.info(f"Current URL (no popup): {main_url_after_login}")
 
                             # Check if we're on business home
