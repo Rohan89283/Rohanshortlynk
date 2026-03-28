@@ -92,6 +92,7 @@ async def check_instagram_cookie(cookie_string: str, user_id=None, proxy_info=No
         # Step 2: Navigate to Facebook Business Suite and click "Login with Instagram"
         step2_success = False
         step2_status = ""
+        new_tab_url = None
 
         if update_callback:
             await update_callback(2, "Navigating to Facebook Business Suite...")
@@ -99,6 +100,11 @@ async def check_instagram_cookie(cookie_string: str, user_id=None, proxy_info=No
         try:
             import time
             from selenium.webdriver.common.by import By
+
+            # Store original window handle and count
+            original_window = driver.current_window_handle
+            original_windows = driver.window_handles
+            original_count = len(original_windows)
 
             driver.get('https://business.facebook.com/latest/home')
 
@@ -130,8 +136,6 @@ async def check_instagram_cookie(cookie_string: str, user_id=None, proxy_info=No
                             element.click()
                             login_button_found = True
                             time.sleep(3)
-                            step2_success = True
-                            step2_status = "Successfully clicked 'Login with Instagram'"
                             break
                     except:
                         continue
@@ -151,10 +155,33 @@ async def check_instagram_cookie(cookie_string: str, user_id=None, proxy_info=No
                     """)
                     if clicked:
                         time.sleep(3)
+                        login_button_found = True
+
+                if login_button_found:
+                    if update_callback:
+                        await update_callback(2, "Detecting new tab redirect...")
+
+                    # Check for new tab/window
+                    new_windows = driver.window_handles
+                    new_count = len(new_windows)
+
+                    if new_count > original_count:
+                        # New tab was opened
+                        new_window = [w for w in new_windows if w not in original_windows][0]
+                        driver.switch_to.window(new_window)
+                        time.sleep(2)
+                        new_tab_url = driver.current_url
                         step2_success = True
-                        step2_status = "Successfully clicked 'Login with Instagram' (JS)"
+                        step2_status = f"New tab opened: {new_tab_url[:60]}..."
+                    elif driver.current_url != 'https://business.facebook.com/latest/home':
+                        # Same tab redirect
+                        new_tab_url = driver.current_url
+                        step2_success = True
+                        step2_status = f"Redirected: {new_tab_url[:60]}..."
                     else:
-                        step2_status = "Could not find 'Login with Instagram' button"
+                        step2_status = "Clicked button but no redirect detected"
+                else:
+                    step2_status = "Could not find 'Login with Instagram' button"
 
             except Exception as e:
                 logger.warning(f"Error finding/clicking button: {e}")
@@ -172,7 +199,8 @@ async def check_instagram_cookie(cookie_string: str, user_id=None, proxy_info=No
             'url': current_url,
             'step1_complete': is_logged_in,
             'step2_complete': step2_success,
-            'step2_status': step2_status
+            'step2_status': step2_status,
+            'redirect_url': new_tab_url
         }
 
     except Exception as e:

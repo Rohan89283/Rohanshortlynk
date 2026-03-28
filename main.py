@@ -51,6 +51,8 @@ async def handle_cookie(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🌐 URL: {result.get('url', 'N/A')}\n\n"
             f"📋 Step 2: {result.get('step2_status', 'Not run')}"
         )
+        if result.get('redirect_url'):
+            response += f"\n🔗 Redirect: {result.get('redirect_url')}"
     else:
         response = f"❌ Cookie is INVALID\n\n{result['message']}"
 
