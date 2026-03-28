@@ -257,24 +257,36 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                 # STEP 2: Navigate to Meta Business Suite and click Instagram login
                 try:
+                    logger.info("=" * 80)
+                    logger.info("STARTING STEP 2: Meta Business Suite Navigation")
+                    logger.info("=" * 80)
+
                     if update_callback:
                         await update_callback(2, "Navigating to Meta Business Suite...")
 
-                    logger.info("STEP 2: Navigating to Meta Business Suite...")
-
                     # Store initial window handle
+                    logger.info("Getting current window handle...")
                     original_window = driver.current_window_handle
-                    logger.info(f"Original window handle: {original_window}")
+                    logger.info(f"✓ Original window handle: {original_window}")
 
                     # Navigate to Meta Business Suite login page
                     meta_business_url = "https://business.facebook.com/business/loginpage/?next=https%3A%2F%2Fbusiness.facebook.com%2F%3Fnav_ref%3Dbiz_unified_f3_login_page_to_mbs&login_options%5B0%5D=FB&login_options%5B1%5D=IG&login_options%5B2%5D=SSO&config_ref=biz_login_tool_flavor_mbs"
+                    logger.info(f"Navigating to: {meta_business_url[:100]}...")
                     driver.get(meta_business_url)
+                    logger.info("✓ Navigation initiated")
 
                     # Wait for page to load
+                    logger.info("Waiting for page to load completely...")
                     WebDriverWait(driver, 10).until(
                         lambda d: d.execute_script('return document.readyState') == 'complete'
                     )
+                    logger.info("✓ Page loaded")
                     time.sleep(3)
+                    logger.info("✓ Additional wait complete")
+
+                    # Log current URL
+                    current_page_url = driver.current_url
+                    logger.info(f"Current URL: {current_page_url}")
 
                     if update_callback:
                         await update_callback(2, "Looking for 'Log in with Instagram' button...")
@@ -428,20 +440,28 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                     result['step2_new_tab_info'] = new_tab_info
 
                 except Exception as e:
-                    logger.error(f"Step 2 failed: {e}")
+                    logger.error(f"Step 2 failed: {e}", exc_info=True)
 
-                    # Capture screenshot even on failure
+                    # Capture screenshot even on failure - this is critical for debugging
+                    screenshot_step2_error = None
+                    error_url = "N/A"
                     try:
                         screenshot_step2_error = driver.get_screenshot_as_png()
                         error_url = driver.current_url
-                        logger.info(f"Step 2 error screenshot captured. URL: {error_url}")
-                    except:
-                        screenshot_step2_error = None
-                        error_url = "N/A"
+                        logger.info(f"✓ Step 2 error screenshot captured successfully. URL: {error_url}")
+                    except Exception as screenshot_error:
+                        logger.error(f"✗ Failed to capture Step 2 error screenshot: {screenshot_error}")
+
+                    # Ensure screenshot exists
+                    if screenshot_step2_error:
+                        logger.info("Step 2 screenshot available to send")
+                    else:
+                        logger.warning("Step 2 screenshot is None - will not be sent")
 
                     result['step2_complete'] = False
                     result['screenshot_step2'] = screenshot_step2_error
                     result['step2_current_url'] = error_url
+                    result['step2_error'] = str(e)
                     result['step2_instagram_clicked'] = False
                     result['step2_login_button_clicked'] = False
                     result['step2_popup_url'] = None
