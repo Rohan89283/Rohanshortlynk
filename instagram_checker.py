@@ -457,103 +457,153 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                             except Exception as e:
                                 logger.warning(f"Failed to get button HTML: {e}")
 
-                            # CLICK TECHNIQUE 1: JavaScript click
+                            # Remove any overlays that might block the click
                             try:
-                                logger.info("  🖱️  TECHNIQUE 1: JavaScript click")
+                                driver.execute_script("""
+                                    // Remove any overlays or blocking elements
+                                    var overlays = document.querySelectorAll('[class*="overlay"], [class*="modal"], [class*="popup"]');
+                                    overlays.forEach(el => el.style.display = 'none');
+                                """)
+                            except:
+                                pass
+
+                            # CLICK TECHNIQUE 1: JavaScript click with force
+                            try:
+                                logger.info("  🖱️  TECHNIQUE 1: JavaScript click (forced)")
+
+                                # Make element visible and clickable
+                                driver.execute_script("""
+                                    arguments[0].style.display = 'block';
+                                    arguments[0].style.visibility = 'visible';
+                                    arguments[0].style.pointerEvents = 'auto';
+                                """, element)
+
+                                # Scroll to element
                                 driver.execute_script("arguments[0].scrollIntoView({behavior: 'auto', block: 'center'});", element)
-                                time.sleep(0.5)
+                                time.sleep(1)
+
                                 old_url = driver.current_url
                                 logger.info(f"  URL before click: {old_url}")
 
+                                # Force click with JavaScript
                                 driver.execute_script("arguments[0].click();", element)
-                                time.sleep(2)
+
+                                # Wait longer for redirect
+                                time.sleep(3)
 
                                 new_url = driver.current_url
                                 logger.info(f"  URL after click: {new_url}")
                                 urls_visited.append(new_url)
 
-                                # Check if URL changed AND it's Instagram related
+                                # Check if URL changed to Instagram OAuth
                                 if old_url != new_url:
-                                    if 'instagram.com' in new_url or 'facebook.com/login' not in new_url:
-                                        logger.info(f"  ✅ SUCCESS! URL changed to: {new_url}")
+                                    if 'instagram.com' in new_url:
+                                        logger.info(f"  ✅ SUCCESS! Redirected to Instagram: {new_url}")
                                         instagram_login_clicked = True
                                         successful_method = f"{method_name}[{idx}]"
-                                        result['step2_click_technique'] = "JS_CLICK"
+                                        result['step2_click_technique'] = "JS_CLICK_FORCED"
                                         break
-                                    else:
-                                        logger.warning(f"  ⚠️  URL changed but to wrong page: {new_url}")
-                                        # Go back
+                                    elif 'facebook.com/login' in new_url:
+                                        logger.warning(f"  ❌ Wrong page - Facebook login: {new_url}")
                                         driver.back()
                                         time.sleep(1)
+                                    else:
+                                        logger.info(f"  ⚠️  URL changed to: {new_url} (might be redirecting...)")
+                                        # Wait a bit more to see if it redirects to Instagram
+                                        time.sleep(2)
+                                        final_url = driver.current_url
+                                        if 'instagram.com' in final_url:
+                                            logger.info(f"  ✅ SUCCESS! Final redirect to Instagram: {final_url}")
+                                            instagram_login_clicked = True
+                                            successful_method = f"{method_name}[{idx}]"
+                                            result['step2_click_technique'] = "JS_CLICK_FORCED"
+                                            urls_visited.append(final_url)
+                                            break
+                                        else:
+                                            logger.warning(f"  ❌ Still not on Instagram: {final_url}")
                                 else:
-                                    logger.info(f"  ❌ No URL change")
+                                    logger.info(f"  ❌ No URL change - button click had no effect")
                             except Exception as e:
                                 logger.warning(f"  ❌ JS click failed: {e}")
 
-                            # CLICK TECHNIQUE 2: Selenium native click
+                            # CLICK TECHNIQUE 2: Direct href navigation (if it's a link)
                             if not instagram_login_clicked:
                                 try:
-                                    logger.info("  🖱️  TECHNIQUE 2: Selenium native click")
+                                    logger.info("  🖱️  TECHNIQUE 2: Direct href navigation")
+
+                                    # Check if element has href
+                                    href = element.get_attribute('href')
+                                    if href:
+                                        logger.info(f"  Found href: {href}")
+                                        old_url = driver.current_url
+
+                                        # Navigate directly to the href
+                                        driver.get(href)
+                                        time.sleep(3)
+
+                                        new_url = driver.current_url
+                                        logger.info(f"  URL after navigation: {new_url}")
+                                        urls_visited.append(new_url)
+
+                                        if 'instagram.com' in new_url:
+                                            logger.info(f"  ✅ SUCCESS! Redirected to Instagram: {new_url}")
+                                            instagram_login_clicked = True
+                                            successful_method = f"{method_name}[{idx}]"
+                                            result['step2_click_technique'] = "DIRECT_HREF"
+                                            break
+                                    else:
+                                        logger.info(f"  ❌ No href attribute - skipping")
+                                except Exception as e:
+                                    logger.warning(f"  ❌ Direct href navigation failed: {e}")
+
+                            # CLICK TECHNIQUE 3: Selenium native click with WebDriverWait
+                            if not instagram_login_clicked:
+                                try:
+                                    logger.info("  🖱️  TECHNIQUE 3: Selenium native click with wait")
+
+                                    # Wait for element to be clickable
+                                    from selenium.webdriver.support import expected_conditions as EC
+                                    WebDriverWait(driver, 5).until(EC.element_to_be_clickable(element))
+
                                     driver.execute_script("arguments[0].scrollIntoView({behavior: 'auto', block: 'center'});", element)
-                                    time.sleep(0.5)
+                                    time.sleep(1)
+
                                     old_url = driver.current_url
                                     logger.info(f"  URL before click: {old_url}")
 
                                     element.click()
-                                    time.sleep(2)
+                                    time.sleep(3)
 
                                     new_url = driver.current_url
                                     logger.info(f"  URL after click: {new_url}")
                                     urls_visited.append(new_url)
 
                                     if old_url != new_url:
-                                        if 'instagram.com' in new_url or 'facebook.com/login' not in new_url:
-                                            logger.info(f"  ✅ SUCCESS! URL changed to: {new_url}")
+                                        if 'instagram.com' in new_url:
+                                            logger.info(f"  ✅ SUCCESS! Redirected to Instagram: {new_url}")
                                             instagram_login_clicked = True
                                             successful_method = f"{method_name}[{idx}]"
-                                            result['step2_click_technique'] = "NATIVE_CLICK"
+                                            result['step2_click_technique'] = "NATIVE_CLICK_WAIT"
                                             break
-                                        else:
-                                            logger.warning(f"  ⚠️  URL changed but to wrong page: {new_url}")
+                                        elif 'facebook.com/login' in new_url:
+                                            logger.warning(f"  ❌ Wrong page - Facebook login: {new_url}")
                                             driver.back()
                                             time.sleep(1)
+                                        else:
+                                            # Wait for potential redirect
+                                            time.sleep(2)
+                                            final_url = driver.current_url
+                                            if 'instagram.com' in final_url:
+                                                logger.info(f"  ✅ SUCCESS! Final redirect to Instagram: {final_url}")
+                                                instagram_login_clicked = True
+                                                successful_method = f"{method_name}[{idx}]"
+                                                result['step2_click_technique'] = "NATIVE_CLICK_WAIT"
+                                                urls_visited.append(final_url)
+                                                break
                                     else:
                                         logger.info(f"  ❌ No URL change")
                                 except Exception as e:
-                                    logger.warning(f"  ❌ Native click failed: {e}")
-
-                            # CLICK TECHNIQUE 3: ActionChains click
-                            if not instagram_login_clicked:
-                                try:
-                                    from selenium.webdriver.common.action_chains import ActionChains
-                                    logger.info("  🖱️  TECHNIQUE 3: ActionChains click")
-                                    driver.execute_script("arguments[0].scrollIntoView({behavior: 'auto', block: 'center'});", element)
-                                    time.sleep(0.5)
-                                    old_url = driver.current_url
-                                    logger.info(f"  URL before click: {old_url}")
-
-                                    ActionChains(driver).move_to_element(element).click().perform()
-                                    time.sleep(2)
-
-                                    new_url = driver.current_url
-                                    logger.info(f"  URL after click: {new_url}")
-                                    urls_visited.append(new_url)
-
-                                    if old_url != new_url:
-                                        if 'instagram.com' in new_url or 'facebook.com/login' not in new_url:
-                                            logger.info(f"  ✅ SUCCESS! URL changed to: {new_url}")
-                                            instagram_login_clicked = True
-                                            successful_method = f"{method_name}[{idx}]"
-                                            result['step2_click_technique'] = "ACTION_CLICK"
-                                            break
-                                        else:
-                                            logger.warning(f"  ⚠️  URL changed but to wrong page: {new_url}")
-                                            driver.back()
-                                            time.sleep(1)
-                                    else:
-                                        logger.info(f"  ❌ No URL change")
-                                except Exception as e:
-                                    logger.warning(f"  ❌ ActionChains click failed: {e}")
+                                    logger.warning(f"  ❌ Native click with wait failed: {e}")
 
                         # Store URLs visited
                         result['step2_urls_visited'] = urls_visited
@@ -765,14 +815,30 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                     except:
                         pass
 
-                    result['step2_complete'] = True
+                    # Verify we're on Business Manager home page
+                    final_step2_url = driver.current_url
+                    logger.info(f"Final Step 2 URL: {final_step2_url}")
+
+                    if 'business.facebook.com' in final_step2_url and 'loginpage' not in final_step2_url:
+                        logger.info("✅ Successfully reached Business Manager home page!")
+                        result['step2_complete'] = True
+                    else:
+                        logger.warning(f"⚠️  Still on login page or unexpected URL: {final_step2_url}")
+                        result['step2_complete'] = False
+
                     result['step2_method'] = successful_method if instagram_login_clicked else "Not clicked"
                     logger.info("=" * 80)
-                    logger.info("STEP 2: COMPLETED")
+                    logger.info(f"STEP 2: {'COMPLETED' if result['step2_complete'] else 'INCOMPLETE'}")
+                    logger.info("=" * 80)
+
+                    # STEP 3 DISABLED FOR NOW - FOCUSING ON STEP 2
+                    logger.info("=" * 80)
+                    logger.info("STEP 3: DISABLED (Focusing on Step 2)")
                     logger.info("=" * 80)
 
                     # Step 3: Navigate to Facebook Ad Center
-                    try:
+                    if False:  # Disabled
+                        try:
                         logger.info("Starting Step 3 - Facebook Ad Center...")
                         if update_callback:
                             await update_callback(3, "Navigating to Ad Center...")
