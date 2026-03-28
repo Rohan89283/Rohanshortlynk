@@ -11,8 +11,9 @@ class ProxyManager:
     """Manage proxies in Supabase database"""
 
     def __init__(self):
-        supabase_url = os.getenv('VITE_SUPABASE_URL')
-        supabase_key = os.getenv('VITE_SUPABASE_ANON_KEY')
+        # Support both Railway auto-variables and manual variables
+        supabase_url = os.getenv('VITE_SUPABASE_URL') or os.getenv('SUPABASE_URL')
+        supabase_key = os.getenv('VITE_SUPABASE_ANON_KEY') or os.getenv('SUPABASE_ANON_KEY')
 
         if not supabase_url or not supabase_key:
             raise ValueError("Supabase credentials not found in environment")
