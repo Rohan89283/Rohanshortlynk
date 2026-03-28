@@ -105,40 +105,24 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         step2_status = "✅" if result.get('step2_complete', False) else "❌"
         step2_text = "Completed" if result.get('step2_complete', False) else "Failed"
 
-        step3_status = "✅" if result.get('step3_complete', False) else "❌"
-        step3_text = "Completed" if result.get('step3_complete', False) else "Failed"
-
         # Get Step 2 details
         step2_clicked = result.get('step2_instagram_clicked', False)
         step2_new_tab = result.get('step2_new_tab_info', {}).get('new_tab_opened', False)
         step2_total_windows = result.get('step2_new_tab_info', {}).get('total_windows', 1)
         step2_login_clicked = result.get('step2_login_button_clicked', False)
 
-        # Get Step 3 details
-        step3_get_started_clicked = result.get('step3_get_started_clicked', False)
-        step3_continue_clicked = result.get('step3_continue_clicked', False)
-        step3_continue_clicked_2 = result.get('step3_continue_clicked_2', False)
-        step3_popup_after_continue2 = result.get('step3_popup_after_continue2', False)
-        step3_login_clicked_after_continue2 = result.get('step3_login_clicked_after_continue2', False)
-
         final_status = (
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             "🔍 *INSTAGRAM COOKIE CHECKER*\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"📋 *Step 1:* Instagram Login {step1_status} {step1_text}\n"
-            f"📋 *Step 2:* Meta Business Suite {step2_status} {step2_text}\n"
-            f"📋 *Step 3:* Ad Center {step3_status} {step3_text}\n\n"
+            f"📋 *Step 2:* Meta Business Suite {step2_status} {step2_text}\n\n"
             f"⏱️ *Time:* {elapsed}s\n"
             f"👤 *Username:* {username}\n"
             f"🔘 *IG Button Clicked:* {'Yes' if step2_clicked else 'No'}\n"
             f"🪟 *New Tab/Popup:* {'Yes' if step2_new_tab else 'No'}\n"
             f"🔑 *Login Button Clicked:* {'Yes' if step2_login_clicked else 'No'}\n"
-            f"📱 *Total Windows:* {step2_total_windows}\n"
-            f"🚀 *Get Started Clicked:* {'Yes' if step3_get_started_clicked else 'No'}\n"
-            f"▶️ *Continue Clicked (1st):* {'Yes' if step3_continue_clicked else 'No'}\n"
-            f"▶️ *Continue Clicked (2nd):* {'Yes' if step3_continue_clicked_2 else 'No'}\n"
-            f"🪟 *Popup After 2nd Continue:* {'Yes' if step3_popup_after_continue2 else 'No'}\n"
-            f"🔑 *Login After 2nd Continue:* {'Yes' if step3_login_clicked_after_continue2 else 'No'}\n\n"
+            f"📱 *Total Windows:* {step2_total_windows}\n\n"
         )
 
         if result['valid']:
@@ -147,14 +131,6 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             final_status += f"❌ *Status:* {result['message']}\n"
 
         await status_msg.edit_text(final_status, parse_mode='Markdown')
-
-        # Only send screenshot for Step 3 (Ad Center)
-        if result.get('screenshot_step3'):
-            step3_url = result.get('step3_current_url', 'N/A')
-            await update.message.reply_photo(
-                photo=BytesIO(result['screenshot_step3']),
-                caption=f"📸 Step 3 - Ad Center\n🔗 URL: {step3_url[:80]}"
-            )
 
     except Exception as e:
         elapsed = int(time.time() - start_time)
@@ -165,8 +141,7 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🔍 *INSTAGRAM COOKIE CHECKER*\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n\n"
             "📋 *Step 1:* Instagram Login ❌ Error\n"
-            "📋 *Step 2:* Meta Business Suite ⏸️ Skipped\n"
-            "📋 *Step 3:* Ad Center ⏸️ Skipped\n\n"
+            "📋 *Step 2:* Meta Business Suite ⏸️ Skipped\n\n"
             f"⏱️ *Time:* {elapsed}s\n"
             "👤 *Username:* N/A\n\n"
             f"❌ *Error:* {str(e)[:100]}"
