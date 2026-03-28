@@ -389,6 +389,9 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         if update_callback:
                             await update_callback(3, "Capturing screenshot...")
 
+                        # Wait 2 seconds before taking screenshot to ensure page is fully rendered
+                        time.sleep(2)
+
                         # Take screenshot for Step 3
                         screenshot_step3 = driver.get_screenshot_as_png()
 
