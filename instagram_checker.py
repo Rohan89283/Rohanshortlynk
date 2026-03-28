@@ -244,6 +244,8 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                 'screenshot': screenshot_step1,
                 'screenshot_step2_before': None,
                 'screenshot_step2_after_click': None,
+                'screenshot_oauth_before': None,
+                'screenshot_oauth_after': None,
                 'screenshot_step2': None,
                 'screenshot_oauth': None,
                 'screenshot_step3': None,
@@ -256,6 +258,9 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                 'step1_complete': is_logged_in,
                 'step2_complete': False,
                 'step2_method': None,
+                'step2_button_html': None,
+                'step2_click_technique': None,
+                'step2_urls_visited': [],
                 'step3_complete': False
             }
 
@@ -432,6 +437,9 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         for method, idx, elem, text in instagram_elements:
                             logger.info(f"  - {method}[{idx}]: '{text}'")
 
+                        # Track URLs visited
+                        urls_visited = [driver.current_url]
+
                         # Now try clicking each element with DIFFERENT click methods
                         for method_name, idx, element, text in instagram_elements:
                             if instagram_login_clicked:
@@ -440,6 +448,14 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                             logger.info(f"\n{'='*60}")
                             logger.info(f"Attempting: {method_name}[{idx}] - '{text}'")
                             logger.info(f"{'='*60}")
+
+                            # Get button outerHTML for debugging
+                            try:
+                                button_html = element.get_attribute('outerHTML')
+                                logger.info(f"Button HTML: {button_html[:300]}...")
+                                result['step2_button_html'] = button_html
+                            except Exception as e:
+                                logger.warning(f"Failed to get button HTML: {e}")
 
                             # CLICK TECHNIQUE 1: JavaScript click
                             try:
@@ -454,13 +470,15 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                                 new_url = driver.current_url
                                 logger.info(f"  URL after click: {new_url}")
+                                urls_visited.append(new_url)
 
                                 # Check if URL changed AND it's Instagram related
                                 if old_url != new_url:
                                     if 'instagram.com' in new_url or 'facebook.com/login' not in new_url:
                                         logger.info(f"  ✅ SUCCESS! URL changed to: {new_url}")
                                         instagram_login_clicked = True
-                                        successful_method = f"{method_name}[{idx}] + JS_CLICK"
+                                        successful_method = f"{method_name}[{idx}]"
+                                        result['step2_click_technique'] = "JS_CLICK"
                                         break
                                     else:
                                         logger.warning(f"  ⚠️  URL changed but to wrong page: {new_url}")
@@ -486,12 +504,14 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                                     new_url = driver.current_url
                                     logger.info(f"  URL after click: {new_url}")
+                                    urls_visited.append(new_url)
 
                                     if old_url != new_url:
                                         if 'instagram.com' in new_url or 'facebook.com/login' not in new_url:
                                             logger.info(f"  ✅ SUCCESS! URL changed to: {new_url}")
                                             instagram_login_clicked = True
-                                            successful_method = f"{method_name}[{idx}] + NATIVE_CLICK"
+                                            successful_method = f"{method_name}[{idx}]"
+                                            result['step2_click_technique'] = "NATIVE_CLICK"
                                             break
                                         else:
                                             logger.warning(f"  ⚠️  URL changed but to wrong page: {new_url}")
@@ -517,12 +537,14 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                                     new_url = driver.current_url
                                     logger.info(f"  URL after click: {new_url}")
+                                    urls_visited.append(new_url)
 
                                     if old_url != new_url:
                                         if 'instagram.com' in new_url or 'facebook.com/login' not in new_url:
                                             logger.info(f"  ✅ SUCCESS! URL changed to: {new_url}")
                                             instagram_login_clicked = True
-                                            successful_method = f"{method_name}[{idx}] + ACTION_CLICK"
+                                            successful_method = f"{method_name}[{idx}]"
+                                            result['step2_click_technique'] = "ACTION_CLICK"
                                             break
                                         else:
                                             logger.warning(f"  ⚠️  URL changed but to wrong page: {new_url}")
@@ -532,6 +554,9 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                         logger.info(f"  ❌ No URL change")
                                 except Exception as e:
                                     logger.warning(f"  ❌ ActionChains click failed: {e}")
+
+                        # Store URLs visited
+                        result['step2_urls_visited'] = urls_visited
 
                         # Log result
                         if instagram_login_clicked:
@@ -563,52 +588,124 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                             # Look for OAuth confirmation page
                             if 'instagram.com/oauth' in current_url or 'instagram.com/accounts' in current_url:
-                                logger.info("✅ Detected Instagram OAuth page!")
+                                logger.info("=" * 80)
+                                logger.info("✅ DETECTED INSTAGRAM OAUTH PAGE!")
+                                logger.info("=" * 80)
+                                logger.info(f"OAuth URL: {current_url}")
 
-                                # Take screenshot of OAuth page
+                                # Take screenshot of OAuth page BEFORE clicking
                                 try:
-                                    screenshot_oauth = driver.get_screenshot_as_png()
-                                    result['screenshot_oauth'] = screenshot_oauth
-                                    logger.info("OAuth page screenshot captured")
+                                    screenshot_oauth_before = driver.get_screenshot_as_png()
+                                    result['screenshot_oauth_before'] = screenshot_oauth_before
+                                    result['screenshot_oauth'] = screenshot_oauth_before  # Keep for compatibility
+                                    logger.info("✅ OAuth page screenshot captured (BEFORE)")
                                 except Exception as e:
-                                    logger.warning(f"Failed to capture OAuth screenshot: {e}")
+                                    logger.warning(f"Failed to capture OAuth BEFORE screenshot: {e}")
 
                                 # Look for confirmation button
                                 try:
-                                    logger.info("Looking for 'Log in as' confirmation button...")
+                                    logger.info("Searching for 'Log in as' confirmation button...")
                                     login_confirmed = False
+                                    oauth_button_html = None
 
-                                    # Try finding confirmation button
+                                    # Try finding confirmation button with multiple selectors
                                     confirm_buttons = driver.find_elements(By.XPATH,
-                                        "//button[contains(., 'Log in as')] | //a[contains(., 'Log in as')] | "
+                                        "//button[contains(., 'Log in as')] | "
+                                        "//a[contains(., 'Log in as')] | "
                                         "//div[@role='button' and contains(., 'Log in as')] | "
-                                        "//button[contains(., 'Continue')] | //button[@type='submit']"
+                                        "//button[contains(., 'Continue')] | "
+                                        "//button[@type='submit'] | "
+                                        "//button[contains(@class, '_acan')] | "
+                                        "//button[contains(@class, '_acas')]"
                                     )
 
-                                    logger.info(f"Found {len(confirm_buttons)} potential confirmation buttons")
+                                    logger.info(f"Found {len(confirm_buttons)} potential OAuth confirmation buttons")
 
-                                    for btn in confirm_buttons:
+                                    # Log all found buttons
+                                    for i, btn in enumerate(confirm_buttons):
                                         try:
                                             if btn.is_displayed():
-                                                logger.info(f"Clicking confirmation button: {btn.text}")
-                                                driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", btn)
-                                                time.sleep(0.3)
-                                                driver.execute_script("arguments[0].click();", btn)
-                                                login_confirmed = True
-                                                logger.info(f"✅ Clicked confirmation button: {btn.text}")
-                                                break
+                                                btn_text = btn.text
+                                                btn_html = btn.get_attribute('outerHTML')
+                                                logger.info(f"  Button {i}: text='{btn_text}', html={btn_html[:150]}...")
                                         except:
+                                            pass
+
+                                    # Try clicking each button
+                                    for btn_idx, btn in enumerate(confirm_buttons):
+                                        try:
+                                            if btn.is_displayed():
+                                                btn_text = btn.text
+                                                logger.info(f"\nAttempting to click OAuth button {btn_idx}: '{btn_text}'")
+
+                                                # Get button HTML
+                                                oauth_button_html = btn.get_attribute('outerHTML')
+
+                                                # Scroll to button
+                                                driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", btn)
+                                                time.sleep(0.5)
+
+                                                # Get URL before click
+                                                url_before_oauth_click = driver.current_url
+                                                logger.info(f"  URL before OAuth click: {url_before_oauth_click}")
+
+                                                # Click the button
+                                                driver.execute_script("arguments[0].click();", btn)
+                                                time.sleep(2)
+
+                                                # Get URL after click
+                                                url_after_oauth_click = driver.current_url
+                                                logger.info(f"  URL after OAuth click: {url_after_oauth_click}")
+                                                urls_visited.append(url_after_oauth_click)
+
+                                                # Check if URL changed
+                                                if url_before_oauth_click != url_after_oauth_click:
+                                                    login_confirmed = True
+                                                    logger.info(f"✅ OAuth confirmation button clicked successfully!")
+                                                    logger.info(f"✅ Button text: '{btn_text}'")
+                                                    logger.info(f"✅ Button HTML: {oauth_button_html[:200]}...")
+                                                    break
+                                                else:
+                                                    logger.warning(f"  ⚠️  No URL change after clicking button {btn_idx}")
+                                        except Exception as e:
+                                            logger.warning(f"  ❌ Failed to click button {btn_idx}: {e}")
                                             continue
 
                                     if login_confirmed:
-                                        logger.info("Confirmation button clicked - waiting for redirect...")
+                                        logger.info("OAuth confirmation successful - waiting for redirect...")
                                         if update_callback:
-                                            await update_callback(2, "Confirming login...")
+                                            await update_callback(2, "OAuth confirmed, redirecting...")
+
+                                        # Wait for page to load
+                                        time.sleep(2)
+
+                                        # Take screenshot AFTER clicking OAuth button
+                                        try:
+                                            screenshot_oauth_after = driver.get_screenshot_as_png()
+                                            result['screenshot_oauth_after'] = screenshot_oauth_after
+                                            logger.info("✅ OAuth page screenshot captured (AFTER)")
+                                        except Exception as e:
+                                            logger.warning(f"Failed to capture OAuth AFTER screenshot: {e}")
                                     else:
-                                        logger.warning("No confirmation button found")
+                                        logger.warning("=" * 80)
+                                        logger.warning("⚠️  NO OAUTH CONFIRMATION BUTTON CLICKED")
+                                        logger.warning("=" * 80)
+                                        logger.warning("May auto-redirect or require manual confirmation")
+
+                                        # Still take "after" screenshot showing current state
+                                        try:
+                                            screenshot_oauth_after = driver.get_screenshot_as_png()
+                                            result['screenshot_oauth_after'] = screenshot_oauth_after
+                                            logger.info("Screenshot captured (OAuth page - no button clicked)")
+                                        except:
+                                            pass
 
                                 except Exception as e:
-                                    logger.warning(f"Error looking for confirmation button: {e}")
+                                    logger.error(f"❌ ERROR looking for OAuth confirmation button: {e}")
+                                    import traceback
+                                    logger.error(traceback.format_exc())
+                            else:
+                                logger.warning(f"⚠️  Not on Instagram OAuth page. Current URL: {current_url}")
 
                             # Wait for redirect to Business Manager
                             logger.info("Waiting for redirect to Business Manager...")
