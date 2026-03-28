@@ -105,6 +105,9 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
         }
         chrome_options.add_experimental_option('prefs', prefs)
 
+        # Use eager page load strategy for faster loading
+        chrome_options.page_load_strategy = 'eager'
+
         # Add binary location
         chrome_options.binary_location = '/usr/bin/google-chrome'
 
@@ -144,7 +147,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
         if update_callback:
             await update_callback(1, "Loading Instagram...")
         driver.get('https://www.instagram.com/')
-        time.sleep(0.5)
+        time.sleep(0.3)
 
         # Parse and add cookies
         cookies = parse_cookie_string(cookie_string)
@@ -159,12 +162,12 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
         if update_callback:
             await update_callback(1, "Applying cookies...")
         driver.refresh()
-        time.sleep(1)
+        time.sleep(0.5)
 
         # Check if logged in by looking for specific elements
         try:
-            # Wait for page to load
-            WebDriverWait(driver, 10).until(
+            # Wait for page to load (reduced timeout)
+            WebDriverWait(driver, 6).until(
                 lambda d: d.execute_script('return document.readyState') == 'complete'
             )
 
@@ -251,8 +254,8 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                     logger.info("Navigating to Facebook Business Manager...")
                     driver.get('https://business.facebook.com/latest/home?locale=en_US')
 
-                    # Wait for page to fully load (optimized wait time)
-                    time.sleep(2)
+                    # Wait for page to fully load (minimized)
+                    time.sleep(1)
 
                     # Inject anti-detection scripts and force English language
                     driver.execute_script("""
@@ -273,8 +276,8 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         if update_callback:
                             await update_callback(2, "Looking for Instagram login...")
 
-                        # Wait for the login page to appear
-                        WebDriverWait(driver, 8).until(
+                        # Wait for the login page to appear (reduced timeout)
+                        WebDriverWait(driver, 5).until(
                             lambda d: d.execute_script('return document.readyState') == 'complete'
                         )
 
@@ -287,7 +290,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                             for element in all_elements:
                                 if 'log in' in element.text.lower() or 'login' in element.text.lower():
                                     driver.execute_script("arguments[0].scrollIntoView(true);", element)
-                                    time.sleep(0.3)
+                                    time.sleep(0.1)
                                     driver.execute_script("arguments[0].click();", element)
                                     instagram_login_clicked = True
                                     logger.info(f"Clicked Instagram login using XPath: {element.text}")
@@ -302,7 +305,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                 for button in buttons:
                                     if 'instagram' in button.text.lower():
                                         driver.execute_script("arguments[0].scrollIntoView(true);", button)
-                                        time.sleep(0.3)
+                                        time.sleep(0.1)
                                         driver.execute_script("arguments[0].click();", button)
                                         instagram_login_clicked = True
                                         logger.info(f"Clicked Instagram login button: {button.text}")
@@ -317,7 +320,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                 for element in clickable_elements:
                                     if 'instagram' in element.text.lower():
                                         driver.execute_script("arguments[0].scrollIntoView(true);", element)
-                                        time.sleep(0.3)
+                                        time.sleep(0.1)
                                         driver.execute_script("arguments[0].click();", element)
                                         instagram_login_clicked = True
                                         logger.info(f"Clicked Instagram login element: {element.text}")
@@ -330,13 +333,13 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                             if update_callback:
                                 await update_callback(2, "Logging in with Instagram...")
                             logger.info("Instagram login button clicked! Waiting for page to load...")
-                            time.sleep(3)
+                            time.sleep(1.5)
 
-                            WebDriverWait(driver, 8).until(
+                            WebDriverWait(driver, 5).until(
                                 lambda d: d.execute_script('return document.readyState') == 'complete'
                             )
 
-                            time.sleep(1)
+                            time.sleep(0.5)
                             logger.info(f"Current URL after click: {driver.current_url}")
                         else:
                             logger.warning("Instagram login button not found")
@@ -357,8 +360,8 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         logger.info("Navigating to Facebook Ad Center...")
                         driver.get('https://business.facebook.com/latest/ad_center/ads_summary?locale=en_US')
 
-                        # Wait for page to fully load (optimized)
-                        time.sleep(5)
+                        # Wait for page to fully load (minimized)
+                        time.sleep(2)
 
                         # Force English language again
                         driver.execute_script("""
@@ -373,13 +376,13 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         if update_callback:
                             await update_callback(3, "Loading Ad Center data...")
 
-                        # Wait for page to be fully loaded
-                        WebDriverWait(driver, 12).until(
+                        # Wait for page to be fully loaded (reduced timeout)
+                        WebDriverWait(driver, 6).until(
                             lambda d: d.execute_script('return document.readyState') == 'complete'
                         )
 
-                        # Additional wait for dynamic content
-                        time.sleep(2)
+                        # Additional wait for dynamic content (minimized)
+                        time.sleep(1)
 
                         logger.info(f"Current URL at Step 3: {driver.current_url}")
 
