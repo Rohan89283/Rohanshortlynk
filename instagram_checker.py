@@ -150,6 +150,23 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
+        # Set locale to English for Facebook/Meta pages
+        logger.info("Setting locale preferences to English...")
+        driver.get('https://www.facebook.com/')
+        time.sleep(1)
+
+        # Set Facebook locale cookie to English
+        try:
+            driver.add_cookie({
+                'name': 'locale',
+                'value': 'en_US',
+                'domain': '.facebook.com',
+                'path': '/'
+            })
+            logger.info("✓ Facebook locale cookie set to en_US")
+        except Exception as e:
+            logger.warning(f"Could not set Facebook locale cookie: {e}")
+
         # Go to Instagram
         logger.info("Navigating to Instagram...")
         if update_callback:
@@ -277,11 +294,23 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                     original_window = driver.current_window_handle
                     logger.info(f"✓ Original window handle: {original_window}")
 
-                    # Navigate to Meta Business Suite login page
-                    meta_business_url = "https://business.facebook.com/business/loginpage/?next=https%3A%2F%2Fbusiness.facebook.com%2F%3Fnav_ref%3Dbiz_unified_f3_login_page_to_mbs&login_options%5B0%5D=FB&login_options%5B1%5D=IG&login_options%5B2%5D=SSO&config_ref=biz_login_tool_flavor_mbs"
+                    # Navigate to Meta Business Suite login page with locale parameter
+                    meta_business_url = "https://business.facebook.com/business/loginpage/?next=https%3A%2F%2Fbusiness.facebook.com%2F%3Fnav_ref%3Dbiz_unified_f3_login_page_to_mbs&login_options%5B0%5D=FB&login_options%5B1%5D=IG&login_options%5B2%5D=SSO&config_ref=biz_login_tool_flavor_mbs&locale=en_US"
                     logger.info(f"Navigating to: {meta_business_url[:100]}...")
                     driver.get(meta_business_url)
                     logger.info("✓ Navigation initiated")
+
+                    # Set locale cookie for Facebook Business
+                    try:
+                        driver.add_cookie({
+                            'name': 'locale',
+                            'value': 'en_US',
+                            'domain': '.facebook.com',
+                            'path': '/'
+                        })
+                        logger.info("✓ Facebook locale cookie refreshed to en_US")
+                    except Exception as e:
+                        logger.warning(f"Could not refresh locale cookie: {e}")
 
                     # Wait for page to load
                     logger.info("Waiting for page to load completely...")
@@ -523,11 +552,23 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         if update_callback:
                             await update_callback(3, "Navigating to Ad Center...")
 
-                        ad_center_url = "https://business.facebook.com/latest/ad_center/ads_summary"
+                        ad_center_url = "https://business.facebook.com/latest/ad_center/ads_summary?locale=en_US"
                         logger.info(f"Navigating to Ad Center: {ad_center_url}")
 
                         driver.get(ad_center_url)
                         logger.info("✓ Navigation initiated to Ad Center")
+
+                        # Ensure locale cookie is still set
+                        try:
+                            driver.add_cookie({
+                                'name': 'locale',
+                                'value': 'en_US',
+                                'domain': '.facebook.com',
+                                'path': '/'
+                            })
+                            logger.info("✓ Locale cookie refreshed for Ad Center")
+                        except Exception as e:
+                            logger.warning(f"Could not refresh locale cookie for Ad Center: {e}")
 
                         # Wait for page to load
                         if update_callback:
