@@ -8,6 +8,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from io import BytesIO
+from typing import Optional, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -32,13 +33,34 @@ def parse_cookie_string(cookie_string: str) -> list:
             })
     return cookies
 
-def check_instagram_cookie(cookie_string: str) -> dict:
+def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, proxy_info: Optional[Dict] = None) -> dict:
     """
     Check Instagram cookie validity and return screenshot
-    Returns: dict with 'valid' (bool), 'screenshot' (bytes), 'message' (str)
+
+    Args:
+        cookie_string: Instagram cookies string
+        user_id: Telegram user ID (for proxy rotation)
+        proxy_info: Optional proxy dict (if None, will fetch from database)
+
+    Returns: dict with 'valid' (bool), 'screenshot' (bytes), 'message' (str), 'proxy_used' (str)
     """
     driver = None
+    proxy_manager = None
+    active_proxy = None
+
     try:
+        # Get proxy if user_id provided and no proxy_info
+        if user_id and not proxy_info:
+            try:
+                from proxy_manager import ProxyManager
+                proxy_manager = ProxyManager()
+                active_proxy = proxy_manager.get_next_proxy(user_id)
+                if active_proxy:
+                    proxy_info = active_proxy
+                    logger.info(f"Using proxy: {proxy_info['host']}:{proxy_info['port']}")
+            except Exception as e:
+                logger.warning(f"Failed to get proxy: {e}")
+
         # Setup Chrome options
         chrome_options = Options()
         chrome_options.add_argument('--headless=new')
@@ -57,6 +79,13 @@ def check_instagram_cookie(cookie_string: str) -> dict:
 
         # Add binary location
         chrome_options.binary_location = '/usr/bin/google-chrome'
+
+        # Add proxy if available
+        if proxy_info:
+            from proxy_validator import ProxyValidator
+            proxy_url = ProxyValidator.build_proxy_url(proxy_info)
+            chrome_options.add_argument(f'--proxy-server={proxy_url}')
+            logger.info(f"Chrome configured with proxy: {proxy_url}")
 
         # Initialize driver with explicit service
         logger.info("Initializing Chrome WebDriver...")
@@ -121,37 +150,62 @@ def check_instagram_cookie(cookie_string: str) -> dict:
             # Take screenshot
             screenshot = driver.get_screenshot_as_png()
 
+            # Update proxy success
+            if proxy_manager and active_proxy:
+                proxy_manager.update_proxy_usage(active_proxy['id'], True)
+
+            proxy_used = f"{proxy_info['host']}:{proxy_info['port']}" if proxy_info else "Direct"
+
             return {
                 'valid': is_logged_in,
                 'screenshot': screenshot,
                 'message': message,
-                'url': current_url
+                'url': current_url,
+                'proxy_used': proxy_used
             }
 
         except TimeoutException:
             screenshot = driver.get_screenshot_as_png()
+            if proxy_manager and active_proxy:
+                proxy_manager.update_proxy_usage(active_proxy['id'], False)
+
+            proxy_used = f"{proxy_info['host']}:{proxy_info['port']}" if proxy_info else "Direct"
+
             return {
                 'valid': False,
                 'screenshot': screenshot,
                 'message': "Timeout while checking login status",
-                'url': driver.current_url
+                'url': driver.current_url,
+                'proxy_used': proxy_used
             }
 
     except WebDriverException as e:
         logger.error(f"WebDriver error: {e}")
+        if proxy_manager and active_proxy:
+            proxy_manager.update_proxy_usage(active_proxy['id'], False)
+
+        proxy_used = f"{proxy_info['host']}:{proxy_info['port']}" if proxy_info else "Direct"
+
         return {
             'valid': False,
             'screenshot': None,
             'message': f"Browser error: {str(e)[:100]}",
-            'url': None
+            'url': None,
+            'proxy_used': proxy_used
         }
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
+        if proxy_manager and active_proxy:
+            proxy_manager.update_proxy_usage(active_proxy['id'], False)
+
+        proxy_used = f"{proxy_info['host']}:{proxy_info['port']}" if proxy_info else "Direct"
+
         return {
             'valid': False,
             'screenshot': None,
             'message': f"Error: {str(e)[:100]}",
-            'url': None
+            'url': None,
+            'proxy_used': proxy_used
         }
     finally:
         if driver:

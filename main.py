@@ -1,8 +1,10 @@
 import os
 import logging
 from telegram import Update, InputFile
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from instagram_checker import check_instagram_cookie
+from proxy_validator import ProxyValidator
+from proxy_manager import ProxyManager
 from io import BytesIO
 
 logging.basicConfig(
@@ -25,6 +27,10 @@ async def cmds(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/cmds - Show all available commands\n"
         "/help - Get detailed help for each command\n"
         "/ig [cookies] - Check Instagram cookie validity\n"
+        "/addproxy - Add proxies (text or file)\n"
+        "/listproxy - List all your proxies\n"
+        "/deleteproxy [id] - Delete specific proxy\n"
+        "/clearproxy - Delete all your proxies\n"
     )
     await update.message.reply_text(commands_list, parse_mode='Markdown')
 
@@ -41,7 +47,20 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Check if Instagram cookies are valid. Usage:\n"
         "`/ig datr=xxx; sessionid=yyy; csrftoken=zzz`\n"
         "The bot will test the cookies and send you a screenshot.\n\n"
-        "More commands coming soon!"
+        "**/addproxy**\n"
+        "Add proxies in various formats:\n"
+        "• `/addproxy ip:port`\n"
+        "• `/addproxy ip:port:user:pass`\n"
+        "• `/addproxy user:pass@ip:port`\n"
+        "• `/addproxy http://ip:port`\n"
+        "• Multiple proxies (one per line)\n"
+        "• Send .txt file with proxies\n\n"
+        "**/listproxy**\n"
+        "View all your saved proxies with their status.\n\n"
+        "**/deleteproxy [id]**\n"
+        "Delete a specific proxy by ID.\n\n"
+        "**/clearproxy**\n"
+        "Remove all your proxies at once."
     )
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
@@ -57,24 +76,23 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Join all arguments as cookie string
+    user_id = update.effective_user.id
     cookie_string = ' '.join(context.args)
 
-    # Send processing message
     status_msg = await update.message.reply_text(
         "🔄 Checking Instagram cookies...\n"
         "This may take 10-15 seconds..."
     )
 
     try:
-        # Check the cookie
-        result = check_instagram_cookie(cookie_string)
+        result = check_instagram_cookie(cookie_string, user_id=user_id)
 
-        # Update status message
+        proxy_info = f"\n🌐 Proxy: {result.get('proxy_used', 'Direct')}"
+
         if result['valid']:
-            status_text = f"✅ {result['message']}\n\nURL: {result['url']}"
+            status_text = f"✅ {result['message']}\n\nURL: {result['url']}{proxy_info}"
         else:
-            status_text = f"❌ {result['message']}\n\nURL: {result.get('url', 'N/A')}"
+            status_text = f"❌ {result['message']}\n\nURL: {result.get('url', 'N/A')}{proxy_info}"
 
         await status_msg.edit_text(status_text)
 
@@ -98,6 +116,198 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Please check if your cookie format is correct and try again."
         )
 
+async def addproxy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Add proxies from text or file"""
+    user_id = update.effective_user.id
+    proxy_text = None
+
+    if update.message.document:
+        file = await context.bot.get_file(update.message.document.file_id)
+        file_content = await file.download_as_bytearray()
+        proxy_text = file_content.decode('utf-8', errors='ignore')
+    elif context.args:
+        proxy_text = ' '.join(context.args).replace(' ', '\n')
+    else:
+        await update.message.reply_text(
+            "📝 *How to add proxies:*\n\n"
+            "Send proxies in any of these formats:\n\n"
+            "• `/addproxy 1.2.3.4:8080`\n"
+            "• `/addproxy 1.2.3.4:8080:user:pass`\n"
+            "• `/addproxy user:pass@1.2.3.4:8080`\n"
+            "• `/addproxy http://1.2.3.4:8080`\n"
+            "• `/addproxy socks5://user:pass@1.2.3.4:1080`\n\n"
+            "Or send multiple proxies (one per line):\n"
+            "```\n/addproxy\n1.2.3.4:8080\n5.6.7.8:3128\n9.10.11.12:8888```\n\n"
+            "Or upload a .txt file with proxies!",
+            parse_mode='Markdown'
+        )
+        return
+
+    status_msg = await update.message.reply_text("🔄 Processing proxies...")
+
+    try:
+        proxies = ProxyValidator.parse_proxy_list(proxy_text)
+
+        if not proxies:
+            await status_msg.edit_text(
+                "❌ No valid proxy format found!\n\n"
+                "Use /help to see supported formats."
+            )
+            return
+
+        await status_msg.edit_text(
+            f"🔍 Found {len(proxies)} proxies\n"
+            f"⏳ Validating proxies (this may take a while)..."
+        )
+
+        valid_proxies = ProxyValidator.validate_proxies_batch(proxies, max_workers=20)
+
+        if not valid_proxies:
+            await status_msg.edit_text(
+                f"❌ None of the {len(proxies)} proxies are working!\n\n"
+                "Please check your proxies and try again."
+            )
+            return
+
+        await status_msg.edit_text(
+            f"💾 Saving {len(valid_proxies)} working proxies..."
+        )
+
+        proxy_manager = ProxyManager()
+        result = proxy_manager.add_proxies(user_id, valid_proxies)
+
+        summary = (
+            f"✅ *Proxy Import Complete*\n\n"
+            f"📊 Total provided: {len(proxies)}\n"
+            f"✅ Valid & working: {len(valid_proxies)}\n"
+            f"💾 Added to database: {result['added']}\n"
+            f"🔄 Already exists: {result['duplicates']}\n"
+            f"❌ Failed to save: {result['failed']}\n\n"
+            f"Use /listproxy to view all your proxies"
+        )
+
+        await status_msg.edit_text(summary, parse_mode='Markdown')
+
+    except Exception as e:
+        logger.error(f"Error in addproxy_command: {e}")
+        await status_msg.edit_text(
+            f"❌ Error processing proxies: {str(e)[:150]}"
+        )
+
+async def listproxy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """List all user proxies"""
+    user_id = update.effective_user.id
+
+    try:
+        proxy_manager = ProxyManager()
+        proxies = proxy_manager.get_all_proxies(user_id)
+
+        if not proxies:
+            await update.message.reply_text(
+                "📭 You don't have any proxies saved.\n\n"
+                "Use /addproxy to add proxies!"
+            )
+            return
+
+        active_count = sum(1 for p in proxies if p['is_active'])
+        inactive_count = len(proxies) - active_count
+
+        message = (
+            f"🔐 *Your Proxies ({len(proxies)} total)*\n"
+            f"✅ Active: {active_count}\n"
+            f"❌ Inactive: {inactive_count}\n\n"
+        )
+
+        for idx, proxy in enumerate(proxies[:50], 1):
+            status = "✅" if proxy['is_active'] else "❌"
+            auth = "🔒" if proxy.get('username') else "🔓"
+
+            message += (
+                f"{idx}. {status} {auth} `{proxy['host']}:{proxy['port']}`\n"
+                f"   Type: {proxy['proxy_type']} | "
+                f"Success: {proxy['success_count']} | "
+                f"Fails: {proxy['fail_count']}\n"
+                f"   ID: `{proxy['id'][:8]}...`\n\n"
+            )
+
+        if len(proxies) > 50:
+            message += f"\n_Showing first 50 of {len(proxies)} proxies_"
+
+        message += "\n\nUse `/deleteproxy [id]` to remove a proxy"
+
+        await update.message.reply_text(message, parse_mode='Markdown')
+
+    except Exception as e:
+        logger.error(f"Error in listproxy_command: {e}")
+        await update.message.reply_text(
+            f"❌ Error fetching proxies: {str(e)[:150]}"
+        )
+
+async def deleteproxy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Delete a specific proxy"""
+    user_id = update.effective_user.id
+
+    if not context.args:
+        await update.message.reply_text(
+            "❌ Please provide proxy ID!\n\n"
+            "Usage: `/deleteproxy [id]`\n"
+            "Use /listproxy to see proxy IDs",
+            parse_mode='Markdown'
+        )
+        return
+
+    proxy_id = context.args[0]
+
+    try:
+        proxy_manager = ProxyManager()
+        success = proxy_manager.delete_proxy(user_id, proxy_id)
+
+        if success:
+            await update.message.reply_text(
+                "✅ Proxy deleted successfully!"
+            )
+        else:
+            await update.message.reply_text(
+                "❌ Failed to delete proxy. Make sure the ID is correct."
+            )
+
+    except Exception as e:
+        logger.error(f"Error in deleteproxy_command: {e}")
+        await update.message.reply_text(
+            f"❌ Error: {str(e)[:150]}"
+        )
+
+async def clearproxy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Delete all proxies for user"""
+    user_id = update.effective_user.id
+
+    try:
+        proxy_manager = ProxyManager()
+        proxies = proxy_manager.get_all_proxies(user_id)
+
+        if not proxies:
+            await update.message.reply_text(
+                "📭 You don't have any proxies to clear."
+            )
+            return
+
+        success = proxy_manager.delete_all_proxies(user_id)
+
+        if success:
+            await update.message.reply_text(
+                f"✅ Successfully deleted all {len(proxies)} proxies!"
+            )
+        else:
+            await update.message.reply_text(
+                "❌ Failed to delete proxies."
+            )
+
+    except Exception as e:
+        logger.error(f"Error in clearproxy_command: {e}")
+        await update.message.reply_text(
+            f"❌ Error: {str(e)[:150]}"
+        )
+
 def main():
     bot_token = os.getenv('BOT_TOKEN')
 
@@ -110,6 +320,11 @@ def main():
     application.add_handler(CommandHandler("cmds", cmds))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("ig", ig_command))
+    application.add_handler(CommandHandler("addproxy", addproxy_command))
+    application.add_handler(CommandHandler("listproxy", listproxy_command))
+    application.add_handler(CommandHandler("deleteproxy", deleteproxy_command))
+    application.add_handler(CommandHandler("clearproxy", clearproxy_command))
+    application.add_handler(MessageHandler(filters.Document.ALL, addproxy_command))
 
     logger.info("Bot started successfully")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
