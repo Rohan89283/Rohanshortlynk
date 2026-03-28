@@ -239,18 +239,25 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                 try:
                     logger.info("Step 1 completed. Starting Step 2 - Facebook Business Manager...")
 
-                    # Navigate to Facebook Business Manager
+                    # Navigate to Facebook Business Manager with English locale
                     logger.info("Navigating to Facebook Business Manager...")
-                    driver.get('https://business.facebook.com/latest/home')
+                    driver.get('https://business.facebook.com/latest/home?locale=en_US')
 
                     # Wait for page to fully load
                     time.sleep(5)
 
-                    # Inject anti-detection scripts
+                    # Inject anti-detection scripts and force English language
                     driver.execute_script("""
                         Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
                         Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
                         Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+                        Object.defineProperty(navigator, 'language', {get: () => 'en-US'});
+
+                        // Force locale to English
+                        if (window.localStorage) {
+                            window.localStorage.setItem('locale', 'en_US');
+                            window.localStorage.setItem('_js_datr', 'en_US');
+                        }
                     """)
 
                     # Try to click "Log in with Instagram" button
@@ -341,12 +348,22 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                     try:
                         logger.info("Starting Step 3 - Facebook Ad Center...")
 
-                        # Navigate to Facebook Ad Center
+                        # Navigate to Facebook Ad Center with English locale
                         logger.info("Navigating to Facebook Ad Center...")
-                        driver.get('https://business.facebook.com/latest/ad_center/ads_summary')
+                        driver.get('https://business.facebook.com/latest/ad_center/ads_summary?locale=en_US')
 
                         # Wait for page to fully load
                         time.sleep(8)
+
+                        # Force English language again
+                        driver.execute_script("""
+                            Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+                            Object.defineProperty(navigator, 'language', {get: () => 'en-US'});
+
+                            if (window.localStorage) {
+                                window.localStorage.setItem('locale', 'en_US');
+                            }
+                        """)
 
                         # Wait for page to be fully loaded
                         WebDriverWait(driver, 15).until(

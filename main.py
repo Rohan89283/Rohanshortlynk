@@ -96,16 +96,37 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "⏱️ *Time:* 0s\n"
         "🌐 *Proxy:* Checking...\n"
         "📍 *Location:* N/A\n"
-        "👤 *Username:* N/A\n"
-        "📊 *Total Posts:* N/A\n\n"
-        "🔄 Initializing...",
+        "👤 *Username:* N/A\n\n"
+        "🔄 Initializing browser...",
         parse_mode='Markdown'
     )
 
     import time
+    import asyncio
     start_time = time.time()
 
+    # Create async wrapper for status updates
+    async def update_status(step, status_text):
+        try:
+            elapsed = int(time.time() - start_time)
+            await status_msg.edit_text(
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "🔍 *INSTAGRAM COOKIE CHECKER*\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"📋 *Step 1:* Instagram Login {'✅' if step > 1 else '⏳' if step == 1 else '⏸️'}\n"
+                f"📋 *Step 2:* Meta Business Home {'✅' if step > 2 else '⏳' if step == 2 else '⏸️'}\n"
+                f"📋 *Step 3:* Ad Center Summary {'✅' if step > 3 else '⏳' if step == 3 else '⏸️'}\n\n"
+                f"⏱️ *Time:* {elapsed}s\n\n"
+                f"🔄 {status_text}",
+                parse_mode='Markdown'
+            )
+        except:
+            pass
+
     try:
+        # Update: Starting Step 1
+        await update_status(1, "Logging into Instagram...")
+
         result = check_instagram_cookie(cookie_string, user_id=user_id)
 
         elapsed = int(time.time() - start_time)
@@ -144,12 +165,7 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await status_msg.edit_text(final_status, parse_mode='Markdown')
 
-        if result['screenshot']:
-            await update.message.reply_photo(
-                photo=BytesIO(result['screenshot']),
-                caption=f"📸 Step 1 - Instagram Login"
-            )
-
+        # Send only Step 2 and Step 3 screenshots
         if result.get('screenshot_step2'):
             await update.message.reply_photo(
                 photo=BytesIO(result['screenshot_step2']),
