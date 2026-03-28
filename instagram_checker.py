@@ -507,6 +507,78 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                     result['step2_new_tab_info'] = new_tab_info
                     result['step2_on_business_home'] = on_business_home
 
+                    # STEP 3: Navigate to Ad Center
+                    logger.info("=" * 80)
+                    logger.info("STARTING STEP 3: Ad Center Navigation")
+                    logger.info("=" * 80)
+
+                    try:
+                        if update_callback:
+                            await update_callback(3, "Navigating to Ad Center...")
+
+                        ad_center_url = "https://business.facebook.com/latest/ad_center/ads_summary"
+                        logger.info(f"Navigating to Ad Center: {ad_center_url}")
+
+                        driver.get(ad_center_url)
+                        logger.info("✓ Navigation initiated to Ad Center")
+
+                        # Wait for page to load
+                        if update_callback:
+                            await update_callback(3, "Loading Ad Center page...")
+
+                        time.sleep(5)
+                        logger.info("✓ Page load wait complete")
+
+                        # Additional wait for dynamic content
+                        time.sleep(3)
+
+                        ad_center_final_url = driver.current_url
+                        logger.info(f"Ad Center URL: {ad_center_final_url}")
+
+                        # Check if we're on the ad center page
+                        on_ad_center = 'ad_center' in ad_center_final_url or 'ads_summary' in ad_center_final_url
+
+                        if on_ad_center:
+                            logger.info("✅ Successfully reached Ad Center page!")
+                            if update_callback:
+                                await update_callback(3, "✅ On Ad Center page!")
+                        else:
+                            logger.info(f"⚠️ May not be on Ad Center. Current: {ad_center_final_url}")
+
+                        # Take screenshot at END of Step 3
+                        screenshot_step3 = driver.get_screenshot_as_png()
+                        logger.info("✓ Step 3 screenshot captured (Ad Center page)")
+
+                        logger.info("=" * 80)
+                        logger.info("STEP 3: COMPLETED - Ad Center check done!")
+                        logger.info(f"On Ad Center: {on_ad_center}")
+                        logger.info("=" * 80)
+
+                        # Update result with step 3 data
+                        result['screenshot_step3'] = screenshot_step3
+                        result['step3_complete'] = True
+                        result['step3_current_url'] = ad_center_final_url
+                        result['step3_on_ad_center'] = on_ad_center
+
+                    except Exception as e:
+                        logger.error(f"Step 3 failed: {e}", exc_info=True)
+
+                        # Capture screenshot even on failure
+                        screenshot_step3_error = None
+                        error_url = "N/A"
+                        try:
+                            screenshot_step3_error = driver.get_screenshot_as_png()
+                            error_url = driver.current_url
+                            logger.info(f"✓ Step 3 error screenshot captured. URL: {error_url}")
+                        except Exception as screenshot_error:
+                            logger.error(f"✗ Failed to capture Step 3 error screenshot: {screenshot_error}")
+
+                        result['step3_complete'] = False
+                        result['screenshot_step3'] = screenshot_step3_error
+                        result['step3_current_url'] = error_url
+                        result['step3_error'] = str(e)
+                        result['step3_on_ad_center'] = False
+
                 except Exception as e:
                     logger.error(f"Step 2 failed: {e}", exc_info=True)
 

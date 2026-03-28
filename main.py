@@ -105,6 +105,9 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         step2_status = "✅" if result.get('step2_complete', False) else "❌"
         step2_text = "Completed" if result.get('step2_complete', False) else "Failed"
 
+        step3_status = "✅" if result.get('step3_complete', False) else "❌"
+        step3_text = "Completed" if result.get('step3_complete', False) else "Failed"
+
         # Get Step 2 details
         step2_clicked = result.get('step2_instagram_clicked', False)
         step2_new_tab = result.get('step2_new_tab_info', {}).get('new_tab_opened', False)
@@ -116,7 +119,8 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🔍 *INSTAGRAM COOKIE CHECKER*\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"📋 *Step 1:* Instagram Login {step1_status} {step1_text}\n"
-            f"📋 *Step 2:* Meta Business Suite {step2_status} {step2_text}\n\n"
+            f"📋 *Step 2:* Meta Business Suite {step2_status} {step2_text}\n"
+            f"📋 *Step 3:* Ad Center {step3_status} {step3_text}\n\n"
             f"⏱️ *Time:* {elapsed}s\n"
             f"👤 *Username:* {username}\n"
             f"🔘 *IG Button Clicked:* {'Yes' if step2_clicked else 'No'}\n"
@@ -147,21 +151,12 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 caption=f"📸 Step 2 - Meta Business Suite (Main Window)\n🔗 URL: {step2_url[:80]}"
             )
 
-        # Send screenshot for Step 2 popup (if exists)
-        if result.get('screenshot_step2_popup'):
-            popup_url = result.get('step2_popup_url', 'N/A')
+        # Send screenshot for Step 3 (Ad Center)
+        if result.get('screenshot_step3'):
+            step3_url = result.get('step3_current_url', 'N/A')
             await update.message.reply_photo(
-                photo=BytesIO(result['screenshot_step2_popup']),
-                caption=f"📸 Step 2 - Popup (Before Login)\n🔗 URL: {popup_url[:80]}"
-            )
-
-        # Send screenshot after clicking Login button (if exists)
-        if result.get('screenshot_step2_after_login'):
-            popup_url_after = result.get('step2_popup_url_after_login', 'N/A')
-            main_url_after = result.get('step2_main_url_after_login', 'N/A')
-            await update.message.reply_photo(
-                photo=BytesIO(result['screenshot_step2_after_login']),
-                caption=f"📸 Step 2 - After Login Button Click\n🔗 Popup URL: {popup_url_after[:60]}\n🔗 Main URL: {main_url_after[:60]}"
+                photo=BytesIO(result['screenshot_step3']),
+                caption=f"📸 Step 3 - Ad Center\n🔗 URL: {step3_url[:80]}"
             )
 
     except Exception as e:
@@ -173,7 +168,8 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🔍 *INSTAGRAM COOKIE CHECKER*\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n\n"
             "📋 *Step 1:* Instagram Login ❌ Error\n"
-            "📋 *Step 2:* Meta Business Suite ⏸️ Skipped\n\n"
+            "📋 *Step 2:* Meta Business Suite ⏸️ Skipped\n"
+            "📋 *Step 3:* Ad Center ⏸️ Skipped\n\n"
             f"⏱️ *Time:* {elapsed}s\n"
             "👤 *Username:* N/A\n\n"
             f"❌ *Error:* {str(e)[:100]}"
