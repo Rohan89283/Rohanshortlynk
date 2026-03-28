@@ -68,7 +68,7 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔍 *INSTAGRAM COOKIE CHECKER*\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n\n"
         "📋 *Step 1:* Instagram Login ⏳\n"
-        "📋 *Step 2:* Profile Data ⏸️\n\n"
+        "📋 *Step 2:* Meta Business Suite ⏸️\n\n"
         "⏱️ *Time:* 0s\n"
         "👤 *Username:* N/A\n\n"
         "🔄 Initializing browser...",
@@ -106,15 +106,22 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         step2_status = "✅" if result.get('step2_complete', False) else "❌"
         step2_text = "Completed" if result.get('step2_complete', False) else "Failed"
 
+        # Get Step 2 details
+        step2_clicked = result.get('step2_instagram_clicked', False)
+        step2_new_tab = result.get('step2_new_tab_info', {}).get('new_tab_opened', False)
+        step2_total_windows = result.get('step2_new_tab_info', {}).get('total_windows', 1)
+
         final_status = (
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             "🔍 *INSTAGRAM COOKIE CHECKER*\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"📋 *Step 1:* Instagram Login {step1_status} {step1_text}\n"
-            f"📋 *Step 2:* Profile Data {step2_status} {step2_text}\n\n"
+            f"📋 *Step 2:* Meta Business Suite {step2_status} {step2_text}\n\n"
             f"⏱️ *Time:* {elapsed}s\n"
             f"👤 *Username:* {username}\n"
-            f"📊 *Total Posts:* {total_posts}\n\n"
+            f"🔘 *IG Button Clicked:* {'Yes' if step2_clicked else 'No'}\n"
+            f"🪟 *New Tab/Popup:* {'Yes' if step2_new_tab else 'No'}\n"
+            f"📱 *Total Windows:* {step2_total_windows}\n\n"
         )
 
         if result['valid']:
@@ -131,11 +138,20 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 caption=f"📸 Step 1 - Instagram Login"
             )
 
-        # Send screenshot for Step 2
+        # Send screenshot for Step 2 (main window)
         if result.get('screenshot_step2'):
+            step2_url = result.get('step2_current_url', 'N/A')
             await update.message.reply_photo(
                 photo=BytesIO(result['screenshot_step2']),
-                caption=f"📸 Step 2 - Profile Page (@{username})"
+                caption=f"📸 Step 2 - Meta Business Suite (Main Window)\n🔗 URL: {step2_url[:80]}"
+            )
+
+        # Send screenshot for Step 2 popup (if exists)
+        if result.get('screenshot_step2_popup'):
+            popup_url = result.get('step2_popup_url', 'N/A')
+            await update.message.reply_photo(
+                photo=BytesIO(result['screenshot_step2_popup']),
+                caption=f"📸 Step 2 - New Tab/Popup Detected!\n🔗 URL: {popup_url[:80]}"
             )
 
     except Exception as e:
@@ -147,10 +163,9 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🔍 *INSTAGRAM COOKIE CHECKER*\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n\n"
             "📋 *Step 1:* Instagram Login ❌ Error\n"
-            "📋 *Step 2:* Profile Data ⏸️ Skipped\n\n"
+            "📋 *Step 2:* Meta Business Suite ⏸️ Skipped\n\n"
             f"⏱️ *Time:* {elapsed}s\n"
-            "👤 *Username:* N/A\n"
-            "📊 *Total Posts:* N/A\n\n"
+            "👤 *Username:* N/A\n\n"
             f"❌ *Error:* {str(e)[:100]}"
         )
 

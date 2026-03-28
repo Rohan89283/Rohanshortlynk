@@ -255,77 +255,122 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                 logger.info("STEP 1: COMPLETED - Instagram login successful!")
                 logger.info("=" * 80)
 
-                # STEP 2: Navigate to profile and get post count
+                # STEP 2: Navigate to Meta Business Suite and click Instagram login
                 try:
                     if update_callback:
-                        await update_callback(2, "Navigating to profile...")
+                        await update_callback(2, "Navigating to Meta Business Suite...")
 
-                    logger.info("STEP 2: Navigating to user profile...")
+                    logger.info("STEP 2: Navigating to Meta Business Suite...")
 
-                    # Navigate to profile page
-                    profile_url = f"https://www.instagram.com/{username}/"
-                    driver.get(profile_url)
+                    # Store initial window handle
+                    original_window = driver.current_window_handle
+                    logger.info(f"Original window handle: {original_window}")
 
-                    # Wait for profile page to load
-                    WebDriverWait(driver, 8).until(
+                    # Navigate to Meta Business Suite login page
+                    meta_business_url = "https://business.facebook.com/business/loginpage/?next=https%3A%2F%2Fbusiness.facebook.com%2F%3Fnav_ref%3Dbiz_unified_f3_login_page_to_mbs&login_options%5B0%5D=FB&login_options%5B1%5D=IG&login_options%5B2%5D=SSO&config_ref=biz_login_tool_flavor_mbs"
+                    driver.get(meta_business_url)
+
+                    # Wait for page to load
+                    WebDriverWait(driver, 10).until(
                         lambda d: d.execute_script('return document.readyState') == 'complete'
                     )
+                    time.sleep(3)
 
                     if update_callback:
-                        await update_callback(2, "Extracting post count...")
+                        await update_callback(2, "Looking for 'Log in with Instagram' button...")
 
-                    # Try to extract post count
-                    time.sleep(2)  # Give page time to render
+                    # Try to find and click "Log in with Instagram" button
+                    logger.info("Searching for 'Log in with Instagram' button...")
 
+                    instagram_login_clicked = False
                     try:
-                        import re
-                        page_source = driver.page_source
-
-                        # Look for post count in various formats
-                        post_patterns = [
-                            r'"edge_owner_to_timeline_media":{"count":(\d+)',
-                            r'"edge_felix_video_timeline":{"count":(\d+)',
-                            r'<meta\s+content="(\d+[KMB]?)\s+Posts',
-                            r'<span[^>]*>(\d+(?:,\d{3})*)\s+posts</span>',
+                        # Try multiple selectors for the Instagram login button
+                        possible_selectors = [
+                            "//span[contains(text(), 'Log in with Instagram')]",
+                            "//div[contains(text(), 'Log in with Instagram')]",
+                            "//button[contains(., 'Log in with Instagram')]",
+                            "//a[contains(., 'Log in with Instagram')]",
                         ]
 
-                        for pattern in post_patterns:
-                            match = re.search(pattern, page_source, re.IGNORECASE)
-                            if match:
-                                total_posts = match.group(1).replace(',', '')
-                                logger.info(f"Found post count: {total_posts}")
-                                break
-
-                        # If still N/A, try to find it in the page text
-                        if total_posts == "N/A":
-                            # Look for the post count element
+                        for selector in possible_selectors:
                             try:
-                                post_element = WebDriverWait(driver, 5).until(
-                                    EC.presence_of_element_located((By.XPATH, "//span[contains(text(), 'posts')]"))
+                                instagram_button = WebDriverWait(driver, 5).until(
+                                    EC.element_to_be_clickable((By.XPATH, selector))
                                 )
-                                post_text = post_element.text
-                                post_count_match = re.search(r'(\d+(?:,\d{3})*)', post_text)
-                                if post_count_match:
-                                    total_posts = post_count_match.group(1).replace(',', '')
+                                logger.info(f"Found Instagram login button using selector: {selector}")
+
+                                # Get count of windows before click
+                                windows_before = len(driver.window_handles)
+                                logger.info(f"Windows before click: {windows_before}")
+
+                                # Click the button
+                                instagram_button.click()
+                                instagram_login_clicked = True
+                                logger.info("Clicked 'Log in with Instagram' button")
+                                break
                             except:
-                                pass
+                                continue
+
+                        if not instagram_login_clicked:
+                            logger.warning("Could not find 'Log in with Instagram' button")
 
                     except Exception as e:
-                        logger.warning(f"Failed to extract post count: {e}")
+                        logger.warning(f"Failed to click Instagram login button: {e}")
 
-                    # Take screenshot for Step 2
-                    screenshot_step2 = driver.get_screenshot_as_png()
-                    logger.info("Step 2 screenshot captured")
+                    # Wait a moment for any popups/tabs to open
+                    time.sleep(3)
+
+                    if update_callback:
+                        await update_callback(2, "Checking for new tabs/popups...")
+
+                    # Check for new windows/tabs
+                    windows_after = driver.window_handles
+                    logger.info(f"Windows after click: {len(windows_after)}")
+
+                    new_tab_info = {
+                        'new_tab_opened': len(windows_after) > len([original_window]),
+                        'total_windows': len(windows_after),
+                        'window_handles': windows_after
+                    }
+
+                    # Capture current URL and page info
+                    current_url = driver.current_url
+                    logger.info(f"Current URL after click: {current_url}")
+
+                    # Take screenshot after click (main window)
+                    screenshot_step2_main = driver.get_screenshot_as_png()
+                    logger.info("Step 2 main window screenshot captured")
+
+                    screenshot_step2_popup = None
+                    popup_url = None
+
+                    # If new window/tab opened, switch to it and capture
+                    if len(windows_after) > 1:
+                        logger.info("New tab/popup detected!")
+                        for window_handle in windows_after:
+                            if window_handle != original_window:
+                                driver.switch_to.window(window_handle)
+                                popup_url = driver.current_url
+                                logger.info(f"Switched to new window. URL: {popup_url}")
+                                time.sleep(2)
+                                screenshot_step2_popup = driver.get_screenshot_as_png()
+                                logger.info("Step 2 popup screenshot captured")
+                                # Switch back to original window
+                                driver.switch_to.window(original_window)
+                                break
 
                     logger.info("=" * 80)
-                    logger.info("STEP 2: COMPLETED - Profile data extracted!")
+                    logger.info("STEP 2: COMPLETED - Meta Business Suite check done!")
                     logger.info("=" * 80)
 
                     # Update result with step 2 data
-                    result['total_posts'] = total_posts
-                    result['screenshot_step2'] = screenshot_step2
+                    result['screenshot_step2'] = screenshot_step2_main
+                    result['screenshot_step2_popup'] = screenshot_step2_popup
                     result['step2_complete'] = True
-                    result['profile_url'] = profile_url
+                    result['step2_instagram_clicked'] = instagram_login_clicked
+                    result['step2_current_url'] = current_url
+                    result['step2_popup_url'] = popup_url
+                    result['step2_new_tab_info'] = new_tab_info
 
                 except Exception as e:
                     logger.error(f"Step 2 failed: {e}")
