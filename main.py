@@ -11,7 +11,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+BOT_TOKEN = os.getenv('BOT_TOKEN')
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start command"""
@@ -72,7 +72,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     """Start the bot"""
     if not BOT_TOKEN:
-        logger.error("TELEGRAM_BOT_TOKEN not set!")
+        logger.error("BOT_TOKEN not set!")
         return
 
     app = Application.builder().token(BOT_TOKEN).build()
