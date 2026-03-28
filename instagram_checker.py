@@ -622,7 +622,29 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                             WebDriverWait(driver, 10).until(
                                 lambda d: d.execute_script('return document.readyState') == 'complete'
                             )
-                            time.sleep(1.5)
+                            time.sleep(2)
+
+                            # Check if a new tab was opened (Instagram OAuth opens in new tab)
+                            logger.info(f"Number of window handles: {len(driver.window_handles)}")
+                            logger.info(f"Current window handle: {driver.current_window_handle}")
+
+                            if len(driver.window_handles) > 1:
+                                logger.info("=" * 80)
+                                logger.info("🎯 NEW TAB DETECTED! Switching to OAuth tab...")
+                                logger.info("=" * 80)
+
+                                # Switch to the new tab (usually the last one)
+                                original_window = driver.current_window_handle
+                                new_window = [w for w in driver.window_handles if w != original_window][0]
+                                driver.switch_to.window(new_window)
+
+                                # Wait for new tab to load
+                                time.sleep(2)
+                                WebDriverWait(driver, 10).until(
+                                    lambda d: d.execute_script('return document.readyState') == 'complete'
+                                )
+
+                                logger.info(f"✅ Switched to new tab: {new_window}")
 
                             # Check current URL
                             current_url = driver.current_url
