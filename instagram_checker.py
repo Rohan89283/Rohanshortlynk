@@ -543,433 +543,292 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                     result['step2_new_tab_info'] = new_tab_info
                     result['step2_on_business_home'] = on_business_home
 
-                    # STEP 3: Navigate to Ad Center and click Get started
+                    # STEP 3: Click "Create ad" -> Continue -> Continue -> Continue as
                     logger.info("=" * 80)
-                    logger.info("STARTING STEP 3: Ad Center Navigation")
+                    logger.info("STARTING STEP 3: Create Ad Flow")
                     logger.info("=" * 80)
 
                     try:
+                        # Stay on business home page - no URL change needed
+                        current_url = driver.current_url
+                        logger.info(f"Current page (Business Home): {current_url}")
+
+                        # Wait for page to be ready
+                        time.sleep(2)
+
+                        screenshot_after_create_ad = None
+                        screenshot_after_continue_1 = None
+                        screenshot_after_continue_2 = None
+                        screenshot_after_continue_as = None
+
+                        create_ad_clicked = False
+                        continue_1_clicked = False
+                        continue_2_clicked = False
+                        continue_as_clicked = False
+                        popup_opened = False
+
+                        # STEP 3.1: Click "Create ad" button
+                        # ===================================
                         if update_callback:
-                            await update_callback(3, "Navigating to Ad Center...")
+                            await update_callback(3, "Looking for 'Create ad' button...")
 
-                        ad_center_url = "https://business.facebook.com/latest/ad_center/ads_summary?locale=en_US"
-                        logger.info(f"Navigating to Ad Center: {ad_center_url}")
-
-                        driver.get(ad_center_url)
-                        logger.info("✓ Navigation initiated to Ad Center")
-
-                        # Ensure locale cookie is still set
+                        logger.info("🔍 Searching for 'Create ad' button...")
                         try:
-                            driver.add_cookie({
-                                'name': 'locale',
-                                'value': 'en_US',
-                                'domain': '.facebook.com',
-                                'path': '/'
-                            })
-                            logger.info("✓ Locale cookie refreshed for Ad Center")
-                        except Exception as e:
-                            logger.warning(f"Could not refresh locale cookie for Ad Center: {e}")
+                            # Target the exact div with specific classes
+                            create_ad_button = WebDriverWait(driver, 10).until(
+                                EC.element_to_be_clickable((By.XPATH,
+                                    "//div[contains(@class, 'x1vvvo52') and contains(@class, 'x1fvot60') and contains(@class, 'xk50ysn') and text()='Create ad']"
+                                ))
+                            )
+                            logger.info("✓ Found 'Create ad' button")
 
-                        # Wait for page to load
-                        if update_callback:
-                            await update_callback(3, "Loading Ad Center page...")
+                            # Scroll into view
+                            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", create_ad_button)
+                            time.sleep(1)
 
-                        time.sleep(5)
-                        logger.info("✓ Page load wait complete")
+                            # Click using JavaScript
+                            driver.execute_script("arguments[0].click();", create_ad_button)
+                            create_ad_clicked = True
+                            logger.info("✅ CLICKED 'Create ad' button")
 
-                        # Additional wait for dynamic content
-                        time.sleep(3)
-
-                        ad_center_final_url = driver.current_url
-                        logger.info(f"Ad Center URL: {ad_center_final_url}")
-
-                        # Check if we're on the ad center page
-                        on_ad_center = 'ad_center' in ad_center_final_url or 'ads_summary' in ad_center_final_url
-
-                        if on_ad_center:
-                            logger.info("✅ Successfully reached Ad Center page!")
                             if update_callback:
-                                await update_callback(3, "✅ On Ad Center page!")
-                        else:
-                            logger.info(f"⚠️ May not be on Ad Center. Current: {ad_center_final_url}")
+                                await update_callback(3, "✓ Clicked 'Create ad', waiting...")
 
-                        # Try to find and click "Get started" button
-                        get_started_clicked = False
-                        continue_clicked = False
+                            time.sleep(3)
 
-                        if update_callback:
-                            await update_callback(3, "Looking for 'Get started' button...")
-
-                        logger.info("Searching for 'Get started' button...")
-                        try:
-                            # Try multiple selectors for the "Get started" button with specific classes
-                            get_started_selectors = [
-                                "//div[contains(@class, 'x1vvvo52') and contains(., 'Get started')]",
-                                "//div[contains(@class, 'x1fvot60') and contains(., 'Get started')]",
-                                "//div[contains(@class, 'xk50ysn') and contains(., 'Get started')]",
-                                "//span[contains(text(), 'Get started')]",
-                                "//div[contains(text(), 'Get started')]",
-                                "//button[contains(., 'Get started')]",
-                                "//a[contains(., 'Get started')]",
-                                "//*[contains(text(), 'Get started')]",
-                            ]
-
-                            for selector in get_started_selectors:
-                                try:
-                                    get_started_button = WebDriverWait(driver, 5).until(
-                                        EC.element_to_be_clickable((By.XPATH, selector))
-                                    )
-                                    logger.info(f"Found 'Get started' button using selector: {selector}")
-
-                                    # Click the button
-                                    get_started_button.click()
-                                    get_started_clicked = True
-                                    logger.info("✓ Clicked 'Get started' button")
-
-                                    if update_callback:
-                                        await update_callback(3, "Clicked 'Get started', waiting...")
-
-                                    # Wait after click
-                                    time.sleep(3)
-                                    break
-                                except Exception as e:
-                                    logger.debug(f"Selector {selector} did not work: {e}")
-                                    continue
-
-                            if not get_started_clicked:
-                                logger.info("No 'Get started' button found - may already be past initial screen")
+                            # Take screenshot after clicking "Create ad"
+                            screenshot_after_create_ad = driver.get_screenshot_as_png()
+                            logger.info("✓ Screenshot captured after 'Create ad' click")
 
                         except Exception as e:
-                            logger.warning(f"Failed to click 'Get started' button: {e}")
+                            logger.error(f"❌ Failed to click 'Create ad' button: {e}")
+                            # Try fallback selector
+                            try:
+                                create_ad_fallback = driver.find_element(By.XPATH, "//*[contains(text(), 'Create ad')]")
+                                driver.execute_script("arguments[0].click();", create_ad_fallback)
+                                create_ad_clicked = True
+                                logger.info("✅ CLICKED 'Create ad' (fallback)")
+                                time.sleep(3)
+                                screenshot_after_create_ad = driver.get_screenshot_as_png()
+                            except Exception as fallback_error:
+                                logger.error(f"❌ Fallback also failed: {fallback_error}")
 
-                        # Try to find and click first "Continue" button
+                        # STEP 3.2: Click first "Continue" button
+                        # ========================================
                         if update_callback:
                             await update_callback(3, "Looking for first 'Continue' button...")
 
-                        logger.info("Searching for first 'Continue' button...")
+                        logger.info("🔍 Searching for first 'Continue' button...")
                         try:
-                            # Try multiple selectors for the "Continue" button with specific classes
-                            continue_selectors = [
-                                "//div[contains(@class, 'x1vvvo52') and contains(., 'Continue')]",
-                                "//div[contains(@class, 'x1fvot60') and contains(., 'Continue')]",
-                                "//div[contains(@class, 'xk50ysn') and contains(., 'Continue')]",
-                                "//div[contains(@class, 'xxio538') and contains(., 'Continue')]",
-                                "//div[contains(@class, 'x1heor9g') and contains(., 'Continue')]",
-                                "//span[contains(text(), 'Continue')]",
-                                "//div[contains(text(), 'Continue')]",
-                                "//button[contains(., 'Continue')]",
-                                "//a[contains(., 'Continue')]",
-                                "//*[contains(text(), 'Continue')]",
-                            ]
+                            # Target the exact div with specific classes
+                            continue_button_1 = WebDriverWait(driver, 10).until(
+                                EC.element_to_be_clickable((By.XPATH,
+                                    "//div[contains(@class, 'x1vvvo52') and contains(@class, 'x1fvot60') and contains(@class, 'xk50ysn') and text()='Continue']"
+                                ))
+                            )
+                            logger.info("✓ Found first 'Continue' button")
 
-                            for selector in continue_selectors:
-                                try:
-                                    continue_button = WebDriverWait(driver, 10).until(
-                                        EC.element_to_be_clickable((By.XPATH, selector))
-                                    )
-                                    logger.info(f"Found first 'Continue' button using selector: {selector}")
+                            # Scroll into view
+                            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", continue_button_1)
+                            time.sleep(1)
 
-                                    # Scroll to button if needed
-                                    try:
-                                        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", continue_button)
-                                        time.sleep(1)
-                                    except:
-                                        pass
+                            # Click using JavaScript
+                            driver.execute_script("arguments[0].click();", continue_button_1)
+                            continue_1_clicked = True
+                            logger.info("✅ CLICKED first 'Continue' button")
 
-                                    # Click the button
-                                    continue_button.click()
-                                    continue_clicked = True
-                                    logger.info("✓ Clicked first 'Continue' button")
+                            if update_callback:
+                                await update_callback(3, "✓ Clicked first 'Continue', waiting...")
 
-                                    if update_callback:
-                                        await update_callback(3, "Clicked first 'Continue', waiting...")
+                            time.sleep(3)
 
-                                    # Wait after click
-                                    time.sleep(3)
-                                    break
-                                except Exception as e:
-                                    logger.debug(f"Selector {selector} did not work: {e}")
-                                    continue
-
-                            if not continue_clicked:
-                                logger.info("No first 'Continue' button found - may already be past that screen")
+                            # Take screenshot after clicking first "Continue"
+                            screenshot_after_continue_1 = driver.get_screenshot_as_png()
+                            logger.info("✓ Screenshot captured after first 'Continue' click")
 
                         except Exception as e:
-                            logger.warning(f"Failed to click first 'Continue' button: {e}")
+                            logger.error(f"❌ Failed to click first 'Continue' button: {e}")
 
-                        # Try to find and click SECOND "Continue" button (in the popup)
-                        continue_clicked_2 = False
-                        popup_opened = False
-
+                        # STEP 3.3: Click second "Continue" button (in popup dialog)
+                        # ===========================================================
                         if update_callback:
-                            await update_callback(3, "Looking for second 'Continue' button...")
+                            await update_callback(3, "Looking for second 'Continue' button in popup...")
 
-                        logger.info("🔍 COMPREHENSIVE SEARCH for second 'Continue' button in ALL contexts...")
-
-                        def find_continue_buttons_everywhere(driver):
-                            """Search for Continue buttons in main page, iframes, dialogs, popups"""
-                            all_buttons = []
-
-                            # PRIORITY 1: Target the EXACT clickable button structure (role=button)
-                            logger.info("🔍 PRIORITY 1: Searching for EXACT button structure (role=button)...")
-                            try:
-                                # The Continue text is in: div[@role='button'] -> span -> div -> div -> div[text='Continue']
-                                exact_button_containers = driver.find_elements(By.XPATH,
-                                    "//div[@role='button']//div[contains(@class, 'x1vvvo52') and contains(@class, 'x1fvot60') and contains(@class, 'xk50ysn') and text()='Continue']"
-                                )
-                                if exact_button_containers:
-                                    logger.info(f"✓ Found {len(exact_button_containers)} EXACT Continue text(s) with role=button parent")
-                                    # Get the parent clickable button for each
-                                    for btn_container in exact_button_containers:
-                                        try:
-                                            # Traverse up to find the div[@role='button']
-                                            clickable_button = btn_container.find_element(By.XPATH, "./ancestor::div[@role='button'][1]")
-                                            all_buttons.insert(0, ('exact_button_role', clickable_button))  # Highest priority
-                                            logger.info(f"  ✓ Found clickable parent with role=button")
-                                        except:
-                                            # If can't find parent, use the div itself
-                                            all_buttons.insert(0, ('exact_button_div', btn_container))
-                                except Exception as e:
-                                    logger.debug(f"Exact button structure search error: {e}")
-
-                            # PRIORITY 2: Search in DIALOGS
-                            logger.info("🔍 PRIORITY 2: Searching in DIALOGS...")
-                            try:
-                                dialog_buttons = driver.find_elements(By.XPATH,
-                                    "//div[@role='dialog']//div[contains(@class, 'x1vvvo52') and contains(@class, 'x1fvot60') and contains(@class, 'xk50ysn') and text()='Continue']"
-                                )
-                                if dialog_buttons:
-                                    logger.info(f"✓ Found {len(dialog_buttons)} Continue button(s) in DIALOG")
-                                    for btn in dialog_buttons:
-                                        try:
-                                            clickable = btn.find_element(By.XPATH, "./ancestor::div[@role='button'][1]")
-                                            all_buttons.append(('dialog_role_button', clickable))
-                                        except:
-                                            all_buttons.append(('dialog_div', btn))
-                            except Exception as e:
-                                logger.debug(f"Dialog search error: {e}")
-
-                            # PRIORITY 3: Search in MAIN PAGE
-                            logger.info("🔍 PRIORITY 3: Searching in MAIN PAGE...")
-                            try:
-                                main_buttons = driver.find_elements(By.XPATH,
-                                    "//div[contains(@class, 'x1vvvo52') and contains(@class, 'x1fvot60') and contains(@class, 'xk50ysn') and text()='Continue']"
-                                )
-                                if main_buttons:
-                                    logger.info(f"✓ Found {len(main_buttons)} Continue button(s) in MAIN PAGE")
-                                    for btn in main_buttons:
-                                        try:
-                                            clickable = btn.find_element(By.XPATH, "./ancestor::div[@role='button'][1]")
-                                            all_buttons.append(('main_role_button', clickable))
-                                        except:
-                                            all_buttons.append(('main_div', btn))
-                            except Exception as e:
-                                logger.debug(f"Main page search error: {e}")
-
-                            # PRIORITY 4: Search in ALL IFRAMES
-                            logger.info("🔍 PRIORITY 4: Searching in IFRAMES...")
-                            try:
-                                iframes = driver.find_elements(By.TAG_NAME, "iframe")
-                                logger.info(f"Found {len(iframes)} iframe(s) on page")
-
-                                for iframe_idx, iframe in enumerate(iframes):
-                                    try:
-                                        driver.switch_to.frame(iframe)
-                                        logger.info(f"  Searching in iframe #{iframe_idx + 1}...")
-
-                                        iframe_buttons = driver.find_elements(By.XPATH,
-                                            "//div[contains(@class, 'x1vvvo52') and contains(@class, 'x1fvot60') and contains(@class, 'xk50ysn') and text()='Continue']"
-                                        )
-                                        if iframe_buttons:
-                                            logger.info(f"  ✓ Found {len(iframe_buttons)} Continue button(s) in iframe #{iframe_idx + 1}")
-                                            for btn in iframe_buttons:
-                                                try:
-                                                    clickable = btn.find_element(By.XPATH, "./ancestor::div[@role='button'][1]")
-                                                    all_buttons.append((f'iframe_{iframe_idx}_role', clickable))
-                                                except:
-                                                    all_buttons.append((f'iframe_{iframe_idx}_div', btn))
-
-                                        driver.switch_to.default_content()
-                                    except Exception as e:
-                                        logger.debug(f"  Iframe #{iframe_idx + 1} error: {e}")
-                                        driver.switch_to.default_content()
-                            except Exception as e:
-                                logger.debug(f"Iframe search error: {e}")
-                                driver.switch_to.default_content()
-
-                            return all_buttons
+                        logger.info("🔍 Searching for second 'Continue' button in popup dialog...")
 
                         try:
-                            # Wait for popup to stabilize
+                            # Wait for popup dialog to appear
                             time.sleep(2)
 
-                            # Find ALL Continue buttons everywhere
-                            all_continue_buttons = find_continue_buttons_everywhere(driver)
+                            # Find the second Continue button (should be in a popup/dialog)
+                            # Try to find it with role=button parent
+                            continue_found = False
 
-                            logger.info(f"📊 TOTAL Continue buttons found: {len(all_continue_buttons)}")
-
-                            # Try to click each button (prioritize exact matches)
-                            for location, btn in all_continue_buttons:
-                                try:
-                                    if btn.is_displayed():
-                                        logger.info(f"🎯 Attempting to click Continue button from: {location}")
-
-                                        # Scroll into view
-                                        driver.execute_script("arguments[0].scrollIntoView(true);", btn)
-                                        time.sleep(0.5)
-
-                                        # Get button text for logging
-                                        btn_text = btn.text
-                                        btn_classes = btn.get_attribute('class')
-                                        logger.info(f"   Button text: '{btn_text}' | Classes: {btn_classes[:100]}...")
-
-                                        # Use JavaScript click
-                                        driver.execute_script("arguments[0].click();", btn)
-
-                                        continue_clicked_2 = True
-                                        logger.info(f"✅✅✅ CLICKED SECOND 'Continue' BUTTON from {location} ✅✅✅")
-
-                                        if update_callback:
-                                            await update_callback(3, f"✓ Clicked second 'Continue' from {location}...")
-
-                                        # Wait after click
-                                        time.sleep(3)
-                                        break
-                                except Exception as e:
-                                    logger.debug(f"Button from {location} failed: {e}")
-                                    continue
-
-                            if not continue_clicked_2:
-                                logger.error("❌ Could NOT click second Continue button - tried ALL locations!")
-                                logger.error("❌ The popup tab will NOT open without this click!")
-
-                        except Exception as e:
-                            logger.error(f"❌ CRITICAL ERROR: Failed to find/click second 'Continue' button: {e}")
-                            logger.error("❌ This will prevent the popup tab from opening")
-
-                        # Check if a popup tab opened after second Continue
-                        screenshot_step3 = None
-                        continue_as_clicked = False
-
-                        if continue_clicked_2:
-                            logger.info("Checking for popup tab after second 'Continue' click...")
                             try:
-                                current_windows = driver.window_handles
-                                logger.info(f"Window handles after second Continue: {len(current_windows)}")
+                                # Method 1: Find the Continue text div and get its role=button parent
+                                continue_text_divs = driver.find_elements(By.XPATH,
+                                    "//div[contains(@class, 'x1vvvo52') and contains(@class, 'x1fvot60') and contains(@class, 'xk50ysn') and text()='Continue']"
+                                )
 
-                                if len(current_windows) > 1:
-                                    popup_opened = True
-                                    logger.info("✓ Popup tab opened!")
+                                if continue_text_divs:
+                                    logger.info(f"✓ Found {len(continue_text_divs)} Continue text div(s)")
 
-                                    if update_callback:
-                                        await update_callback(3, "Popup tab detected, looking for 'Continue as' button...")
+                                    # Try to find the one with role=button ancestor
+                                    for text_div in continue_text_divs:
+                                        try:
+                                            clickable_parent = text_div.find_element(By.XPATH, "./ancestor::div[@role='button'][1]")
+                                            if clickable_parent.is_displayed():
+                                                driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", clickable_parent)
+                                                time.sleep(1)
+                                                driver.execute_script("arguments[0].click();", clickable_parent)
+                                                continue_2_clicked = True
+                                                continue_found = True
+                                                logger.info("✅ CLICKED second 'Continue' button (via role=button parent)")
+                                                break
+                                        except:
+                                            continue
 
-                                    # Store main window
-                                    main_window = driver.current_window_handle
-
-                                    # Switch to popup tab
-                                    for window in current_windows:
-                                        if window != main_window:
-                                            driver.switch_to.window(window)
-                                            popup_url = driver.current_url
-                                            logger.info(f"Switched to popup tab. URL: {popup_url}")
-
-                                            # Wait for popup content to load
-                                            time.sleep(2)
-
-                                            # Try to find and click "Continue as [username]" button
-                                            logger.info("Searching for 'Continue as' button in popup...")
+                                    # If no role=button parent found, try clicking the div itself
+                                    if not continue_found:
+                                        for text_div in continue_text_divs:
                                             try:
-                                                # Try multiple selectors for the "Continue as" button
-                                                continue_as_selectors = [
-                                                    "//button[@name='__CONFIRM__' and contains(@class, 'layerConfirm')]",
-                                                    "//button[@name='__CONFIRM__']",
-                                                    "//button[contains(@class, 'layerConfirm')]",
-                                                    "//button[contains(., 'Continue as')]",
-                                                    "//button[@type='submit' and contains(@class, '_42ft')]",
-                                                    "//button[@value='1' and @name='__CONFIRM__']",
-                                                ]
-
-                                                for selector in continue_as_selectors:
-                                                    try:
-                                                        continue_as_button = WebDriverWait(driver, 10).until(
-                                                            EC.element_to_be_clickable((By.XPATH, selector))
-                                                        )
-                                                        logger.info(f"Found 'Continue as' button using selector: {selector}")
-
-                                                        # Scroll to button if needed
-                                                        try:
-                                                            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", continue_as_button)
-                                                            time.sleep(1)
-                                                        except:
-                                                            pass
-
-                                                        # Click the button
-                                                        continue_as_button.click()
-                                                        continue_as_clicked = True
-                                                        logger.info("✓ Clicked 'Continue as' button in popup")
-
-                                                        if update_callback:
-                                                            await update_callback(3, "Clicked 'Continue as', waiting for redirect...")
-
-                                                        # Wait after click
-                                                        time.sleep(3)
-                                                        break
-                                                    except Exception as e:
-                                                        logger.debug(f"Selector {selector} did not work: {e}")
-                                                        continue
-
-                                                if not continue_as_clicked:
-                                                    logger.info("No 'Continue as' button found in popup")
-
-                                            except Exception as e:
-                                                logger.warning(f"Failed to click 'Continue as' button: {e}")
-
-                                            # Take screenshot after clicking (or if button not found)
-                                            screenshot_step3 = driver.get_screenshot_as_png()
-                                            logger.info("✓ Step 3 screenshot captured (popup tab after 'Continue as' click)")
-
-                                            # Close popup tab
-                                            driver.close()
-
-                                            # Switch back to main window
-                                            driver.switch_to.window(main_window)
-                                            logger.info("✓ Closed popup and switched back to main window")
-                                            break
-                                else:
-                                    logger.info("No popup tab opened after second Continue")
-                                    # Take screenshot of current page
-                                    screenshot_step3 = driver.get_screenshot_as_png()
-                                    logger.info("✓ Step 3 screenshot captured (main page)")
+                                                if text_div.is_displayed():
+                                                    driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", text_div)
+                                                    time.sleep(1)
+                                                    driver.execute_script("arguments[0].click();", text_div)
+                                                    continue_2_clicked = True
+                                                    continue_found = True
+                                                    logger.info("✅ CLICKED second 'Continue' button (direct)")
+                                                    break
+                                            except:
+                                                continue
 
                             except Exception as e:
-                                logger.warning(f"Error checking for popup tab: {e}")
-                                # Take screenshot anyway
-                                screenshot_step3 = driver.get_screenshot_as_png()
-                                logger.info("✓ Step 3 screenshot captured (fallback)")
-                        else:
-                            # Take screenshot of current page if second Continue wasn't clicked
-                            screenshot_step3 = driver.get_screenshot_as_png()
-                            logger.info("✓ Step 3 screenshot captured (Ad Center page)")
+                                logger.debug(f"Method 1 failed: {e}")
+
+                            if not continue_found:
+                                logger.error("❌ Could NOT find/click second Continue button")
+
+                            if update_callback:
+                                await update_callback(3, "✓ Clicked second 'Continue', waiting...")
+
+                            time.sleep(3)
+
+                            # Take screenshot after second Continue
+                            screenshot_after_continue_2 = driver.get_screenshot_as_png()
+                            logger.info("✓ Screenshot captured after second 'Continue' click")
+
+                        except Exception as e:
+                            logger.error(f"❌ Failed to click second 'Continue' button: {e}")
+
+                        # STEP 3.4: Check for popup tab and click "Continue as" button
+                        # ============================================================
+                        logger.info("🔍 Checking for popup tab after second 'Continue' click...")
+                        try:
+                            time.sleep(2)
+                            current_windows = driver.window_handles
+                            logger.info(f"Window handles: {len(current_windows)}")
+
+                            if len(current_windows) > 1:
+                                popup_opened = True
+                                logger.info("✓ Popup tab opened!")
+
+                                if update_callback:
+                                    await update_callback(3, "Switching to popup tab...")
+
+                                # Store main window
+                                main_window = driver.current_window_handle
+
+                                # Switch to popup tab
+                                for window in current_windows:
+                                    if window != main_window:
+                                        driver.switch_to.window(window)
+                                        popup_url = driver.current_url
+                                        logger.info(f"✓ Switched to popup tab. URL: {popup_url}")
+
+                                        # Wait for popup content to load
+                                        time.sleep(2)
+
+                                        # Look for "Continue as [username]" button
+                                        if update_callback:
+                                            await update_callback(3, "Looking for 'Continue as' button...")
+
+                                        logger.info("🔍 Searching for 'Continue as' button...")
+                                        try:
+                                            # Target exact button with all classes
+                                            continue_as_button = WebDriverWait(driver, 10).until(
+                                                EC.element_to_be_clickable((By.XPATH,
+                                                    "//button[@value='1' and @name='__CONFIRM__' and @type='submit' and contains(@class, 'layerConfirm')]"
+                                                ))
+                                            )
+                                            logger.info("✓ Found 'Continue as' button")
+
+                                            # Scroll into view
+                                            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", continue_as_button)
+                                            time.sleep(1)
+
+                                            # Click
+                                            continue_as_button.click()
+                                            continue_as_clicked = True
+                                            logger.info("✅ CLICKED 'Continue as' button")
+
+                                            if update_callback:
+                                                await update_callback(3, "✓ Clicked 'Continue as', waiting...")
+
+                                            time.sleep(3)
+
+                                        except Exception as e:
+                                            logger.error(f"❌ Failed to click 'Continue as' button: {e}")
+                                            # Try fallback selector
+                                            try:
+                                                continue_as_fallback = driver.find_element(By.XPATH, "//button[@name='__CONFIRM__']")
+                                                continue_as_fallback.click()
+                                                continue_as_clicked = True
+                                                logger.info("✅ CLICKED 'Continue as' (fallback)")
+                                                time.sleep(3)
+                                            except Exception as fallback_error:
+                                                logger.error(f"❌ Fallback also failed: {fallback_error}")
+
+                                        # Take screenshot in popup tab
+                                        screenshot_after_continue_as = driver.get_screenshot_as_png()
+                                        logger.info("✓ Screenshot captured in popup tab after 'Continue as' click")
+
+                                        # Close popup tab
+                                        driver.close()
+                                        logger.info("✓ Closed popup tab")
+
+                                        # Switch back to main window
+                                        driver.switch_to.window(main_window)
+                                        logger.info("✓ Switched back to main window")
+                                        break
+                            else:
+                                logger.warning("⚠️ Popup tab did NOT open after second Continue click")
+
+                        except Exception as e:
+                            logger.error(f"❌ Error during popup tab handling: {e}")
 
                         logger.info("=" * 80)
-                        logger.info("STEP 3: COMPLETED - Ad Center check done!")
-                        logger.info(f"On Ad Center: {on_ad_center}")
-                        logger.info(f"Get started clicked: {get_started_clicked}")
-                        logger.info(f"First Continue clicked: {continue_clicked}")
-                        logger.info(f"Second Continue clicked: {continue_clicked_2}")
+                        logger.info("STEP 3: COMPLETED - Create Ad Flow Done!")
+                        logger.info(f"'Create ad' clicked: {create_ad_clicked}")
+                        logger.info(f"First 'Continue' clicked: {continue_1_clicked}")
+                        logger.info(f"Second 'Continue' clicked: {continue_2_clicked}")
                         logger.info(f"Popup tab opened: {popup_opened}")
                         logger.info(f"'Continue as' clicked: {continue_as_clicked}")
                         logger.info("=" * 80)
 
+                        final_url = driver.current_url
+                        logger.info(f"Final URL: {final_url}")
+
                         # Update result with step 3 data
-                        result['screenshot_step3'] = screenshot_step3
+                        result['screenshot_after_create_ad'] = screenshot_after_create_ad
+                        result['screenshot_after_continue_1'] = screenshot_after_continue_1
+                        result['screenshot_after_continue_2'] = screenshot_after_continue_2
+                        result['screenshot_after_continue_as'] = screenshot_after_continue_as
                         result['step3_complete'] = True
-                        result['step3_current_url'] = ad_center_final_url
-                        result['step3_on_ad_center'] = on_ad_center
-                        result['step3_get_started_clicked'] = get_started_clicked
-                        result['step3_continue_clicked'] = continue_clicked
-                        result['step3_continue_clicked_2'] = continue_clicked_2
+                        result['step3_current_url'] = final_url
+                        result['step3_create_ad_clicked'] = create_ad_clicked
+                        result['step3_continue_1_clicked'] = continue_1_clicked
+                        result['step3_continue_2_clicked'] = continue_2_clicked
                         result['step3_popup_opened'] = popup_opened
                         result['step3_continue_as_clicked'] = continue_as_clicked
 
@@ -977,20 +836,27 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         logger.error(f"Step 3 failed: {e}", exc_info=True)
 
                         # Capture screenshot even on failure
-                        screenshot_step3_error = None
+                        screenshot_error = None
                         error_url = "N/A"
                         try:
-                            screenshot_step3_error = driver.get_screenshot_as_png()
+                            screenshot_error = driver.get_screenshot_as_png()
                             error_url = driver.current_url
                             logger.info(f"✓ Step 3 error screenshot captured. URL: {error_url}")
-                        except Exception as screenshot_error:
-                            logger.error(f"✗ Failed to capture Step 3 error screenshot: {screenshot_error}")
+                        except Exception as screenshot_error_ex:
+                            logger.error(f"✗ Failed to capture Step 3 error screenshot: {screenshot_error_ex}")
 
                         result['step3_complete'] = False
-                        result['screenshot_step3'] = screenshot_step3_error
+                        result['screenshot_after_create_ad'] = screenshot_error
+                        result['screenshot_after_continue_1'] = None
+                        result['screenshot_after_continue_2'] = None
+                        result['screenshot_after_continue_as'] = None
                         result['step3_current_url'] = error_url
                         result['step3_error'] = str(e)
-                        result['step3_on_ad_center'] = False
+                        result['step3_create_ad_clicked'] = False
+                        result['step3_continue_1_clicked'] = False
+                        result['step3_continue_2_clicked'] = False
+                        result['step3_popup_opened'] = False
+                        result['step3_continue_as_clicked'] = False
 
                 except Exception as e:
                     logger.error(f"Step 2 failed: {e}", exc_info=True)
