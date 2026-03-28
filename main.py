@@ -130,6 +130,25 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await status_msg.edit_text(final_status, parse_mode='Markdown')
 
+        # Send all screenshots in order
+        if result.get('screenshot'):
+            await update.message.reply_photo(
+                photo=BytesIO(result['screenshot']),
+                caption=f"📸 Step 1 - Instagram Login"
+            )
+
+        if result.get('screenshot_oauth'):
+            await update.message.reply_photo(
+                photo=BytesIO(result['screenshot_oauth']),
+                caption=f"📸 OAuth Confirmation Page"
+            )
+
+        if result.get('screenshot_step2'):
+            await update.message.reply_photo(
+                photo=BytesIO(result['screenshot_step2']),
+                caption=f"📸 Step 2 - Meta Business Home"
+            )
+
         if result.get('screenshot_step3'):
             await update.message.reply_photo(
                 photo=BytesIO(result['screenshot_step3']),

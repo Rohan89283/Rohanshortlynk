@@ -135,6 +135,9 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
             return {
                 'valid': False,
                 'screenshot': None,
+                'screenshot_step2': None,
+                'screenshot_oauth': None,
+                'screenshot_step3': None,
                 'message': f"Chrome initialization failed: {str(e)[:100]}",
                 'url': None,
                 'proxy_used': f"{proxy_info['host']}:{proxy_info['port']}" if proxy_info else "Direct"
@@ -228,6 +231,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
             # Take screenshot for Step 1
             screenshot_step1 = driver.get_screenshot_as_png()
+            logger.info("Step 1 screenshot captured")
 
             # Update proxy success
             if proxy_manager and active_proxy:
@@ -239,6 +243,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                 'valid': is_logged_in,
                 'screenshot': screenshot_step1,
                 'screenshot_step2': None,
+                'screenshot_oauth': None,
                 'screenshot_step3': None,
                 'message': message,
                 'url': current_url,
@@ -292,58 +297,91 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         # Look for Instagram login button - try multiple selectors
                         instagram_login_clicked = False
 
-                        # Method 1: Try finding by text in all clickable elements (a, button, div with role)
+                        # Method 1: Try finding by exact text match "Log in with Instagram"
                         try:
-                            all_elements = driver.find_elements(By.XPATH, "//a[contains(., 'Instagram')] | //button[contains(., 'Instagram')] | //div[@role='button' and contains(., 'Instagram')]")
-                            for element in all_elements:
-                                text = element.text.lower()
-                                if 'log in' in text or 'login' in text or 'instagram' in text:
-                                    try:
+                            exact_match = driver.find_elements(By.XPATH,
+                                "//*[normalize-space(text())='Log in with Instagram'] | "
+                                "//*[contains(normalize-space(text()), 'Log in with Instagram')]"
+                            )
+                            for element in exact_match:
+                                try:
+                                    # Check if element is visible and clickable
+                                    if element.is_displayed():
                                         driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
                                         time.sleep(0.3)
                                         driver.execute_script("arguments[0].click();", element)
                                         instagram_login_clicked = True
-                                        logger.info(f"Clicked Instagram login using XPath: {element.text}")
+                                        logger.info(f"Clicked Instagram login (exact match): {element.text}")
                                         break
-                                    except:
-                                        continue
+                                except:
+                                    continue
                         except Exception as e:
-                            logger.warning(f"Method 1 failed: {e}")
+                            logger.warning(f"Method 1 (exact match) failed: {e}")
 
-                        # Method 2: Try finding any element with aria-label containing Instagram
+                        # Method 2: Try finding by text in clickable elements (a, button, div with role)
                         if not instagram_login_clicked:
                             try:
-                                elements = driver.find_elements(By.XPATH, "//*[contains(@aria-label, 'Instagram') or contains(@aria-label, 'instagram')]")
-                                for element in elements:
+                                all_elements = driver.find_elements(By.XPATH,
+                                    "//a[contains(., 'Instagram')] | "
+                                    "//button[contains(., 'Instagram')] | "
+                                    "//div[@role='button' and contains(., 'Instagram')]"
+                                )
+                                for element in all_elements:
                                     try:
-                                        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
-                                        time.sleep(0.3)
-                                        driver.execute_script("arguments[0].click();", element)
-                                        instagram_login_clicked = True
-                                        logger.info(f"Clicked Instagram login via aria-label")
-                                        break
+                                        text = element.text.lower()
+                                        if ('log in' in text or 'login' in text) and 'instagram' in text:
+                                            if element.is_displayed():
+                                                driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
+                                                time.sleep(0.3)
+                                                driver.execute_script("arguments[0].click();", element)
+                                                instagram_login_clicked = True
+                                                logger.info(f"Clicked Instagram login (XPath): {element.text}")
+                                                break
                                     except:
                                         continue
                             except Exception as e:
                                 logger.warning(f"Method 2 failed: {e}")
 
-                        # Method 3: Find all clickable elements and check text
+                        # Method 3: Try finding by aria-label containing Instagram
                         if not instagram_login_clicked:
                             try:
-                                clickable_elements = driver.find_elements(By.CSS_SELECTOR, "a, button, div[role='button'], span[role='button']")
-                                for element in clickable_elements:
+                                elements = driver.find_elements(By.XPATH,
+                                    "//*[contains(@aria-label, 'Instagram') or contains(@aria-label, 'instagram')]"
+                                )
+                                for element in elements:
                                     try:
-                                        if 'instagram' in element.text.lower():
+                                        if element.is_displayed():
                                             driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
                                             time.sleep(0.3)
                                             driver.execute_script("arguments[0].click();", element)
                                             instagram_login_clicked = True
-                                            logger.info(f"Clicked Instagram login element: {element.text}")
+                                            logger.info(f"Clicked Instagram login (aria-label)")
                                             break
                                     except:
                                         continue
                             except Exception as e:
                                 logger.warning(f"Method 3 failed: {e}")
+
+                        # Method 4: Find any visible clickable element containing "instagram"
+                        if not instagram_login_clicked:
+                            try:
+                                clickable_elements = driver.find_elements(By.CSS_SELECTOR,
+                                    "a, button, div[role='button'], span[role='button']"
+                                )
+                                for element in clickable_elements:
+                                    try:
+                                        text = element.text.lower()
+                                        if 'instagram' in text and element.is_displayed():
+                                            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
+                                            time.sleep(0.3)
+                                            driver.execute_script("arguments[0].click();", element)
+                                            instagram_login_clicked = True
+                                            logger.info(f"Clicked Instagram login (CSS): {element.text}")
+                                            break
+                                    except:
+                                        continue
+                            except Exception as e:
+                                logger.warning(f"Method 4 failed: {e}")
 
                         # If clicked, wait for Instagram OAuth and redirect back
                         if instagram_login_clicked:
@@ -364,6 +402,15 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                             # Look for "Log in as [username]" confirmation button
                             if 'instagram.com/oauth' in current_url or 'instagram.com/accounts' in current_url:
                                 logger.info("Detected Instagram OAuth page - looking for confirmation button...")
+
+                                # Take screenshot of OAuth page
+                                try:
+                                    screenshot_oauth = driver.get_screenshot_as_png()
+                                    result['screenshot_oauth'] = screenshot_oauth
+                                    logger.info("OAuth page screenshot captured")
+                                except Exception as e:
+                                    logger.warning(f"Failed to capture OAuth screenshot: {e}")
+
                                 try:
                                     # Try to find and click the "Log in as" button with various methods
                                     login_confirmed = False
@@ -452,6 +499,14 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                     except Exception as e:
                         logger.warning(f"Failed to click Instagram login: {e}")
+
+                    # Take screenshot after Step 2 completion
+                    try:
+                        screenshot_step2 = driver.get_screenshot_as_png()
+                        result['screenshot_step2'] = screenshot_step2
+                        logger.info("Step 2 screenshot captured")
+                    except Exception as e:
+                        logger.warning(f"Failed to capture Step 2 screenshot: {e}")
 
                     result['step2_complete'] = True
                     logger.info("Step 2 completed")
@@ -563,6 +618,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                 'valid': False,
                 'screenshot': screenshot,
                 'screenshot_step2': None,
+                'screenshot_oauth': None,
                 'screenshot_step3': None,
                 'message': "Timeout while checking login status",
                 'url': driver.current_url,
@@ -587,6 +643,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
             'valid': False,
             'screenshot': None,
             'screenshot_step2': None,
+            'screenshot_oauth': None,
             'screenshot_step3': None,
             'message': f"Browser error: {str(e)[:100]}",
             'url': None,
@@ -610,6 +667,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
             'valid': False,
             'screenshot': None,
             'screenshot_step2': None,
+            'screenshot_oauth': None,
             'screenshot_step3': None,
             'message': f"Error: {str(e)[:100]}",
             'url': None,
