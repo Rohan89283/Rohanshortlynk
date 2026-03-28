@@ -1,11 +1,15 @@
 import os
 import logging
+from dotenv import load_dotenv
 from telegram import Update, InputFile
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from instagram_checker import check_instagram_cookie
 from proxy_validator import ProxyValidator
 from proxy_manager import ProxyManager
 from io import BytesIO
+
+# Load environment variables
+load_dotenv()
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -145,7 +149,8 @@ async def addproxy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• `user:complex-pass@proxy.com:8080`\n\n"
             "Or send multiple proxies (one per line)\n"
             "Or upload a .txt file with proxies!\n\n"
-            "*Note:* Password can contain special characters and colons",
+            "*Note:* Password can contain special characters and colons\n"
+            "*Note:* Fast validation checks proxy connectivity only",
             parse_mode='Markdown'
         )
         return
@@ -164,10 +169,10 @@ async def addproxy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await status_msg.edit_text(
             f"🔍 Found {len(proxies)} proxies\n"
-            f"⏳ Validating proxies (this may take a while)..."
+            f"⚡ Fast validating proxies..."
         )
 
-        valid_proxies = ProxyValidator.validate_proxies_batch(proxies, max_workers=20)
+        valid_proxies = ProxyValidator.validate_proxies_batch(proxies, max_workers=50, fast_mode=True)
 
         if not valid_proxies:
             await status_msg.edit_text(

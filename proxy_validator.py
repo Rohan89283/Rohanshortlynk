@@ -1,8 +1,10 @@
 import re
+import socket
 import requests
 from typing import List, Dict, Optional
 import logging
 from urllib.parse import urlparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logger = logging.getLogger(__name__)
 
@@ -91,8 +93,32 @@ class ProxyValidator:
         return None
 
     @staticmethod
+    def validate_proxy_fast(proxy_info: Dict, timeout: float = 3.0) -> bool:
+        """Fast TCP connection test to check if proxy is reachable"""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(timeout)
+
+            result = sock.connect_ex((proxy_info['host'], proxy_info['port']))
+            sock.close()
+
+            if result == 0:
+                logger.info(f"Proxy {proxy_info['host']}:{proxy_info['port']} is reachable")
+                return True
+            else:
+                logger.warning(f"Proxy {proxy_info['host']}:{proxy_info['port']} connection failed")
+                return False
+
+        except socket.gaierror:
+            logger.error(f"Proxy {proxy_info['host']}:{proxy_info['port']} - DNS resolution failed")
+            return False
+        except Exception as e:
+            logger.error(f"Proxy validation failed for {proxy_info['host']}:{proxy_info['port']}: {e}")
+            return False
+
+    @staticmethod
     def validate_proxy(proxy_info: Dict, timeout: int = 10) -> bool:
-        """Test if proxy is working"""
+        """Test if proxy is working with HTTP request (slower but more accurate)"""
         try:
             proxy_url = ProxyValidator.build_proxy_url(proxy_info)
             proxies = {
@@ -152,15 +178,21 @@ class ProxyValidator:
         return proxies
 
     @staticmethod
-    def validate_proxies_batch(proxies: List[Dict], max_workers: int = 10) -> List[Dict]:
-        """Validate multiple proxies concurrently"""
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+    def validate_proxies_batch(proxies: List[Dict], max_workers: int = 50, fast_mode: bool = True) -> List[Dict]:
+        """
+        Validate multiple proxies concurrently
 
+        Args:
+            proxies: List of proxy dictionaries
+            max_workers: Number of concurrent validation threads
+            fast_mode: If True, use fast TCP check; if False, use HTTP request
+        """
         valid_proxies = []
+        validation_func = ProxyValidator.validate_proxy_fast if fast_mode else ProxyValidator.validate_proxy
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_proxy = {
-                executor.submit(ProxyValidator.validate_proxy, proxy): proxy
+                executor.submit(validation_func, proxy): proxy
                 for proxy in proxies
             }
 
