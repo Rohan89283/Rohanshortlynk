@@ -342,7 +342,11 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                     logger.info("Step 2 main window screenshot captured")
 
                     screenshot_step2_popup = None
+                    screenshot_step2_after_login = None
                     popup_url = None
+                    popup_url_after_login = None
+                    main_url_after_login = None
+                    login_button_clicked = False
 
                     # If new window/tab opened, switch to it and capture
                     if len(windows_after) > 1:
@@ -355,8 +359,55 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                 time.sleep(2)
                                 screenshot_step2_popup = driver.get_screenshot_as_png()
                                 logger.info("Step 2 popup screenshot captured")
+
+                                # Now try to click "Log in as" button in the popup
+                                if update_callback:
+                                    await update_callback(2, "Clicking 'Log in as' button...")
+
+                                logger.info("Searching for 'Log in as' button in popup...")
+                                try:
+                                    # Try multiple selectors for the "Log in as" button
+                                    login_as_selectors = [
+                                        "//button[contains(., 'Log in as')]",
+                                        "//span[contains(text(), 'Log in as')]",
+                                        "//div[contains(text(), 'Log in as')]",
+                                        "//*[contains(text(), 'Log in as')]",
+                                    ]
+
+                                    for selector in login_as_selectors:
+                                        try:
+                                            login_as_button = WebDriverWait(driver, 5).until(
+                                                EC.element_to_be_clickable((By.XPATH, selector))
+                                            )
+                                            logger.info(f"Found 'Log in as' button using selector: {selector}")
+                                            login_as_button.click()
+                                            login_button_clicked = True
+                                            logger.info("Clicked 'Log in as' button")
+                                            break
+                                        except:
+                                            continue
+
+                                    if not login_button_clicked:
+                                        logger.warning("Could not find 'Log in as' button")
+
+                                except Exception as e:
+                                    logger.warning(f"Failed to click 'Log in as' button: {e}")
+
+                                # Wait for page to load after clicking
+                                if login_button_clicked:
+                                    time.sleep(4)
+                                    popup_url_after_login = driver.current_url
+                                    logger.info(f"Popup URL after login: {popup_url_after_login}")
+                                    screenshot_step2_after_login = driver.get_screenshot_as_png()
+                                    logger.info("Popup screenshot after login captured")
+
                                 # Switch back to original window
                                 driver.switch_to.window(original_window)
+
+                                # Check main window URL after login
+                                time.sleep(2)
+                                main_url_after_login = driver.current_url
+                                logger.info(f"Main window URL after login: {main_url_after_login}")
                                 break
 
                     logger.info("=" * 80)
@@ -366,10 +417,14 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                     # Update result with step 2 data
                     result['screenshot_step2'] = screenshot_step2_main
                     result['screenshot_step2_popup'] = screenshot_step2_popup
+                    result['screenshot_step2_after_login'] = screenshot_step2_after_login
                     result['step2_complete'] = True
                     result['step2_instagram_clicked'] = instagram_login_clicked
+                    result['step2_login_button_clicked'] = login_button_clicked
                     result['step2_current_url'] = current_url
                     result['step2_popup_url'] = popup_url
+                    result['step2_popup_url_after_login'] = popup_url_after_login
+                    result['step2_main_url_after_login'] = main_url_after_login
                     result['step2_new_tab_info'] = new_tab_info
 
                 except Exception as e:

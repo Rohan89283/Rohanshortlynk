@@ -109,6 +109,7 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         step2_clicked = result.get('step2_instagram_clicked', False)
         step2_new_tab = result.get('step2_new_tab_info', {}).get('new_tab_opened', False)
         step2_total_windows = result.get('step2_new_tab_info', {}).get('total_windows', 1)
+        step2_login_clicked = result.get('step2_login_button_clicked', False)
 
         final_status = (
             "━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -120,6 +121,7 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"👤 *Username:* {username}\n"
             f"🔘 *IG Button Clicked:* {'Yes' if step2_clicked else 'No'}\n"
             f"🪟 *New Tab/Popup:* {'Yes' if step2_new_tab else 'No'}\n"
+            f"🔑 *Login Button Clicked:* {'Yes' if step2_login_clicked else 'No'}\n"
             f"📱 *Total Windows:* {step2_total_windows}\n\n"
         )
 
@@ -150,7 +152,16 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             popup_url = result.get('step2_popup_url', 'N/A')
             await update.message.reply_photo(
                 photo=BytesIO(result['screenshot_step2_popup']),
-                caption=f"📸 Step 2 - New Tab/Popup Detected!\n🔗 URL: {popup_url[:80]}"
+                caption=f"📸 Step 2 - Popup (Before Login)\n🔗 URL: {popup_url[:80]}"
+            )
+
+        # Send screenshot after clicking Login button (if exists)
+        if result.get('screenshot_step2_after_login'):
+            popup_url_after = result.get('step2_popup_url_after_login', 'N/A')
+            main_url_after = result.get('step2_main_url_after_login', 'N/A')
+            await update.message.reply_photo(
+                photo=BytesIO(result['screenshot_step2_after_login']),
+                caption=f"📸 Step 2 - After Login Button Click\n🔗 Popup URL: {popup_url_after[:60]}\n🔗 Main URL: {main_url_after[:60]}"
             )
 
     except Exception as e:
