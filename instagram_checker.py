@@ -710,39 +710,64 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                             """Search for Continue buttons in main page, iframes, dialogs, popups"""
                             all_buttons = []
 
-                            # 1. Search in MAIN PAGE first
-                            logger.info("🔍 Searching in MAIN PAGE...")
+                            # PRIORITY 1: Target the EXACT clickable button structure (role=button)
+                            logger.info("🔍 PRIORITY 1: Searching for EXACT button structure (role=button)...")
                             try:
-                                # Target the exact div structure you provided
-                                main_buttons = driver.find_elements(By.XPATH,
-                                    "//div[contains(@class, 'x1vvvo52') and contains(@class, 'x1fvot60') and contains(@class, 'xk50ysn') and contains(text(), 'Continue')]"
+                                # The Continue text is in: div[@role='button'] -> span -> div -> div -> div[text='Continue']
+                                exact_button_containers = driver.find_elements(By.XPATH,
+                                    "//div[@role='button']//div[contains(@class, 'x1vvvo52') and contains(@class, 'x1fvot60') and contains(@class, 'xk50ysn') and text()='Continue']"
                                 )
-                                if main_buttons:
-                                    logger.info(f"✓ Found {len(main_buttons)} Continue button(s) in MAIN PAGE (exact class match)")
-                                    all_buttons.extend([('main_exact', btn) for btn in main_buttons])
+                                if exact_button_containers:
+                                    logger.info(f"✓ Found {len(exact_button_containers)} EXACT Continue text(s) with role=button parent")
+                                    # Get the parent clickable button for each
+                                    for btn_container in exact_button_containers:
+                                        try:
+                                            # Traverse up to find the div[@role='button']
+                                            clickable_button = btn_container.find_element(By.XPATH, "./ancestor::div[@role='button'][1]")
+                                            all_buttons.insert(0, ('exact_button_role', clickable_button))  # Highest priority
+                                            logger.info(f"  ✓ Found clickable parent with role=button")
+                                        except:
+                                            # If can't find parent, use the div itself
+                                            all_buttons.insert(0, ('exact_button_div', btn_container))
+                                except Exception as e:
+                                    logger.debug(f"Exact button structure search error: {e}")
 
-                                # Also try broader selectors
-                                main_buttons_2 = driver.find_elements(By.XPATH, "//div[contains(text(), 'Continue')]")
-                                if main_buttons_2:
-                                    logger.info(f"✓ Found {len(main_buttons_2)} Continue button(s) in MAIN PAGE (broad match)")
-                                    all_buttons.extend([('main_broad', btn) for btn in main_buttons_2])
-                            except Exception as e:
-                                logger.debug(f"Main page search error: {e}")
-
-                            # 2. Search in DIALOGS
-                            logger.info("🔍 Searching in DIALOGS...")
+                            # PRIORITY 2: Search in DIALOGS
+                            logger.info("🔍 PRIORITY 2: Searching in DIALOGS...")
                             try:
                                 dialog_buttons = driver.find_elements(By.XPATH,
-                                    "//div[@role='dialog']//div[contains(@class, 'x1vvvo52') and contains(text(), 'Continue')]"
+                                    "//div[@role='dialog']//div[contains(@class, 'x1vvvo52') and contains(@class, 'x1fvot60') and contains(@class, 'xk50ysn') and text()='Continue']"
                                 )
                                 if dialog_buttons:
                                     logger.info(f"✓ Found {len(dialog_buttons)} Continue button(s) in DIALOG")
-                                    all_buttons.extend([('dialog', btn) for btn in dialog_buttons])
+                                    for btn in dialog_buttons:
+                                        try:
+                                            clickable = btn.find_element(By.XPATH, "./ancestor::div[@role='button'][1]")
+                                            all_buttons.append(('dialog_role_button', clickable))
+                                        except:
+                                            all_buttons.append(('dialog_div', btn))
                             except Exception as e:
                                 logger.debug(f"Dialog search error: {e}")
 
-                            # 3. Search in ALL IFRAMES
-                            logger.info("🔍 Searching in IFRAMES...")
+                            # PRIORITY 3: Search in MAIN PAGE
+                            logger.info("🔍 PRIORITY 3: Searching in MAIN PAGE...")
+                            try:
+                                main_buttons = driver.find_elements(By.XPATH,
+                                    "//div[contains(@class, 'x1vvvo52') and contains(@class, 'x1fvot60') and contains(@class, 'xk50ysn') and text()='Continue']"
+                                )
+                                if main_buttons:
+                                    logger.info(f"✓ Found {len(main_buttons)} Continue button(s) in MAIN PAGE")
+                                    for btn in main_buttons:
+                                        try:
+                                            clickable = btn.find_element(By.XPATH, "./ancestor::div[@role='button'][1]")
+                                            all_buttons.append(('main_role_button', clickable))
+                                        except:
+                                            all_buttons.append(('main_div', btn))
+                            except Exception as e:
+                                logger.debug(f"Main page search error: {e}")
+
+                            # PRIORITY 4: Search in ALL IFRAMES
+                            logger.info("🔍 PRIORITY 4: Searching in IFRAMES...")
                             try:
                                 iframes = driver.find_elements(By.TAG_NAME, "iframe")
                                 logger.info(f"Found {len(iframes)} iframe(s) on page")
@@ -753,11 +778,16 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                         logger.info(f"  Searching in iframe #{iframe_idx + 1}...")
 
                                         iframe_buttons = driver.find_elements(By.XPATH,
-                                            "//div[contains(@class, 'x1vvvo52') and contains(text(), 'Continue')]"
+                                            "//div[contains(@class, 'x1vvvo52') and contains(@class, 'x1fvot60') and contains(@class, 'xk50ysn') and text()='Continue']"
                                         )
                                         if iframe_buttons:
                                             logger.info(f"  ✓ Found {len(iframe_buttons)} Continue button(s) in iframe #{iframe_idx + 1}")
-                                            all_buttons.extend([(f'iframe_{iframe_idx}', btn) for btn in iframe_buttons])
+                                            for btn in iframe_buttons:
+                                                try:
+                                                    clickable = btn.find_element(By.XPATH, "./ancestor::div[@role='button'][1]")
+                                                    all_buttons.append((f'iframe_{iframe_idx}_role', clickable))
+                                                except:
+                                                    all_buttons.append((f'iframe_{iframe_idx}_div', btn))
 
                                         driver.switch_to.default_content()
                                     except Exception as e:
