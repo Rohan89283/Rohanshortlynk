@@ -651,10 +651,14 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         try:
                             # Try multiple selectors for the "Continue" button
                             continue_selectors = [
+                                "//div[contains(@class, 'x1vvvo52') and contains(., 'Continue')]",
+                                "//div[contains(@class, 'x1fvot60') and contains(., 'Continue')]",
+                                "//div[contains(@class, 'xk50ysn') and contains(., 'Continue')]",
                                 "//span[contains(text(), 'Continue')]",
                                 "//div[contains(text(), 'Continue')]",
                                 "//button[contains(., 'Continue')]",
                                 "//a[contains(., 'Continue')]",
+                                "//*[contains(text(), 'Continue')]",
                             ]
 
                             for selector in continue_selectors:
@@ -709,7 +713,20 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                             # Try to find and click it within the current context
                             continue_button_found = False
 
-                            for selector in continue_selectors:
+                            # Enhanced selectors for the 2nd Continue button with specific classes
+                            continue_selectors_2 = [
+                                "//div[contains(@class, 'x1vvvo52') and contains(., 'Continue')]",
+                                "//div[contains(@class, 'x1fvot60') and contains(., 'Continue')]",
+                                "//div[contains(@class, 'xk50ysn') and contains(., 'Continue')]",
+                                "//div[contains(@class, 'xxio538') and contains(., 'Continue')]",
+                                "//div[contains(@class, 'x1heor9g') and contains(., 'Continue')]",
+                                "//span[contains(text(), 'Continue')]",
+                                "//div[contains(text(), 'Continue')]",
+                                "//button[contains(., 'Continue')]",
+                                "//*[contains(text(), 'Continue')]",
+                            ]
+
+                            for selector in continue_selectors_2:
                                 try:
                                     # Wait for the second continue button in popup
                                     continue_button_2 = WebDriverWait(driver, 10).until(
