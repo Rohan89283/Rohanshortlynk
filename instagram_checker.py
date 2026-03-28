@@ -34,7 +34,7 @@ def parse_cookie_string(cookie_string: str) -> list:
             })
     return cookies
 
-def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, proxy_info: Optional[Dict] = None, update_callback=None) -> dict:
+async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, proxy_info: Optional[Dict] = None, update_callback=None) -> dict:
     """
     Check Instagram cookie validity and return screenshot
 
@@ -42,7 +42,7 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
         cookie_string: Instagram cookies string
         user_id: Telegram user ID (for proxy rotation)
         proxy_info: Optional proxy dict (if None, will fetch from database)
-        update_callback: Optional callback function for status updates
+        update_callback: Optional async callback function for status updates (step, message)
 
     Returns: dict with 'valid' (bool), 'screenshot' (bytes), 'message' (str), 'proxy_used' (str)
     """
@@ -141,8 +141,10 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
 
         # Go to Instagram
         logger.info("Navigating to Instagram...")
+        if update_callback:
+            await update_callback(1, "Loading Instagram...")
         driver.get('https://www.instagram.com/')
-        time.sleep(1)
+        time.sleep(0.5)
 
         # Parse and add cookies
         cookies = parse_cookie_string(cookie_string)
@@ -154,8 +156,10 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                 logger.warning(f"Failed to add cookie {cookie['name']}: {e}")
 
         # Refresh to apply cookies
+        if update_callback:
+            await update_callback(1, "Applying cookies...")
         driver.refresh()
-        time.sleep(2)
+        time.sleep(1)
 
         # Check if logged in by looking for specific elements
         try:
@@ -165,6 +169,8 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
             )
 
             # Check if we're logged in (look for home feed or profile elements)
+            if update_callback:
+                await update_callback(1, "Verifying login status...")
             current_url = driver.current_url
             page_source = driver.page_source.lower()
 
@@ -238,13 +244,15 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
             if is_logged_in:
                 try:
                     logger.info("Step 1 completed. Starting Step 2 - Facebook Business Manager...")
+                    if update_callback:
+                        await update_callback(2, "Navigating to Meta Business...")
 
                     # Navigate to Facebook Business Manager with English locale
                     logger.info("Navigating to Facebook Business Manager...")
                     driver.get('https://business.facebook.com/latest/home?locale=en_US')
 
-                    # Wait for page to fully load (reduced wait time)
-                    time.sleep(3)
+                    # Wait for page to fully load (optimized wait time)
+                    time.sleep(2)
 
                     # Inject anti-detection scripts and force English language
                     driver.execute_script("""
@@ -262,8 +270,11 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
 
                     # Try to click "Log in with Instagram" button
                     try:
+                        if update_callback:
+                            await update_callback(2, "Looking for Instagram login...")
+
                         # Wait for the login page to appear
-                        WebDriverWait(driver, 10).until(
+                        WebDriverWait(driver, 8).until(
                             lambda d: d.execute_script('return document.readyState') == 'complete'
                         )
 
@@ -275,10 +286,8 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                             all_elements = driver.find_elements(By.XPATH, "//*[contains(text(), 'Instagram') or contains(text(), 'instagram')]")
                             for element in all_elements:
                                 if 'log in' in element.text.lower() or 'login' in element.text.lower():
-                                    # Scroll to element
                                     driver.execute_script("arguments[0].scrollIntoView(true);", element)
-                                    time.sleep(0.5)
-                                    # Click using JavaScript
+                                    time.sleep(0.3)
                                     driver.execute_script("arguments[0].click();", element)
                                     instagram_login_clicked = True
                                     logger.info(f"Clicked Instagram login using XPath: {element.text}")
@@ -293,7 +302,7 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                                 for button in buttons:
                                     if 'instagram' in button.text.lower():
                                         driver.execute_script("arguments[0].scrollIntoView(true);", button)
-                                        time.sleep(0.5)
+                                        time.sleep(0.3)
                                         driver.execute_script("arguments[0].click();", button)
                                         instagram_login_clicked = True
                                         logger.info(f"Clicked Instagram login button: {button.text}")
@@ -308,7 +317,7 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                                 for element in clickable_elements:
                                     if 'instagram' in element.text.lower():
                                         driver.execute_script("arguments[0].scrollIntoView(true);", element)
-                                        time.sleep(0.5)
+                                        time.sleep(0.3)
                                         driver.execute_script("arguments[0].click();", element)
                                         instagram_login_clicked = True
                                         logger.info(f"Clicked Instagram login element: {element.text}")
@@ -318,42 +327,38 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
 
                         # If clicked, wait for redirect and page load
                         if instagram_login_clicked:
+                            if update_callback:
+                                await update_callback(2, "Logging in with Instagram...")
                             logger.info("Instagram login button clicked! Waiting for page to load...")
-                            time.sleep(5)  # Reduced wait time
+                            time.sleep(3)
 
-                            # Wait for page to be fully loaded
-                            WebDriverWait(driver, 10).until(
+                            WebDriverWait(driver, 8).until(
                                 lambda d: d.execute_script('return document.readyState') == 'complete'
                             )
 
-                            # Additional wait for dynamic content
-                            time.sleep(2)
-
+                            time.sleep(1)
                             logger.info(f"Current URL after click: {driver.current_url}")
                         else:
-                            logger.warning("Instagram login button not found, taking screenshot of current page")
+                            logger.warning("Instagram login button not found")
 
                     except Exception as e:
                         logger.warning(f"Failed to click Instagram login: {e}")
 
-                    # Take screenshot for Step 2
-                    screenshot_step2 = driver.get_screenshot_as_png()
-
-                    result['screenshot_step2'] = screenshot_step2
                     result['step2_complete'] = True
-
-                    logger.info("Step 2 completed - Screenshot captured")
+                    logger.info("Step 2 completed")
 
                     # Step 3: Navigate to Facebook Ad Center
                     try:
                         logger.info("Starting Step 3 - Facebook Ad Center...")
+                        if update_callback:
+                            await update_callback(3, "Navigating to Ad Center...")
 
                         # Navigate to Facebook Ad Center with English locale
                         logger.info("Navigating to Facebook Ad Center...")
                         driver.get('https://business.facebook.com/latest/ad_center/ads_summary?locale=en_US')
 
-                        # Wait for page to fully load
-                        time.sleep(8)
+                        # Wait for page to fully load (optimized)
+                        time.sleep(5)
 
                         # Force English language again
                         driver.execute_script("""
@@ -365,15 +370,21 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                             }
                         """)
 
+                        if update_callback:
+                            await update_callback(3, "Loading Ad Center data...")
+
                         # Wait for page to be fully loaded
-                        WebDriverWait(driver, 15).until(
+                        WebDriverWait(driver, 12).until(
                             lambda d: d.execute_script('return document.readyState') == 'complete'
                         )
 
                         # Additional wait for dynamic content
-                        time.sleep(3)
+                        time.sleep(2)
 
                         logger.info(f"Current URL at Step 3: {driver.current_url}")
+
+                        if update_callback:
+                            await update_callback(3, "Capturing screenshot...")
 
                         # Take screenshot for Step 3
                         screenshot_step3 = driver.get_screenshot_as_png()

@@ -92,13 +92,11 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🔄 {status_text}",
                 parse_mode='Markdown'
             )
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to update status: {e}")
 
     try:
-        await update_status(1, "Logging into Instagram...")
-
-        result = check_instagram_cookie(cookie_string, user_id=user_id)
+        result = await check_instagram_cookie(cookie_string, user_id=user_id, update_callback=update_status)
 
         elapsed = int(time.time() - start_time)
         username = result.get('username', 'N/A')
@@ -131,12 +129,6 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             final_status += f"❌ *Status:* {result['message']}\n"
 
         await status_msg.edit_text(final_status, parse_mode='Markdown')
-
-        if result.get('screenshot_step2'):
-            await update.message.reply_photo(
-                photo=BytesIO(result['screenshot_step2']),
-                caption=f"📸 Step 2 - Meta Business Home"
-            )
 
         if result.get('screenshot_step3'):
             await update.message.reply_photo(
