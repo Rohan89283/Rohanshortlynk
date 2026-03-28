@@ -380,7 +380,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                         # Check if popup/new tab opened
                         if len(windows_after) > 1:
-                            logger.info("✓ New tab/popup detected! Need to click 'Log in as username'")
+                            logger.info("✓ New tab/popup detected!")
                             new_tab_info = {
                                 'new_tab_opened': True,
                                 'total_windows': len(windows_after),
@@ -390,61 +390,87 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                             for window_handle in windows_after:
                                 if window_handle != original_window:
-                                    driver.switch_to.window(window_handle)
-                                    popup_url = driver.current_url
-                                    logger.info(f"Switched to popup window. URL: {popup_url}")
-                                    time.sleep(2)
-                                    screenshot_step2_popup = driver.get_screenshot_as_png()
-                                    logger.info("Step 2 popup screenshot captured (before login)")
-
-                                    # Now try to click "Log in as username" button in the popup
-                                    if update_callback:
-                                        await update_callback(2, "Clicking 'Log in as' button in popup...")
-
-                                    logger.info("Searching for 'Log in as' button in popup...")
                                     try:
-                                        # Try multiple selectors for the "Log in as" button
-                                        login_as_selectors = [
-                                            "//button[contains(., 'Log in as')]",
-                                            "//span[contains(text(), 'Log in as')]",
-                                            "//div[contains(text(), 'Log in as')]",
-                                            "//*[contains(text(), 'Log in as')]",
-                                        ]
+                                        driver.switch_to.window(window_handle)
+                                        popup_url = driver.current_url
+                                        logger.info(f"Switched to popup window. URL: {popup_url}")
 
-                                        for selector in login_as_selectors:
+                                        # Take screenshot immediately (popup may close quickly)
+                                        try:
+                                            screenshot_step2_popup = driver.get_screenshot_as_png()
+                                            logger.info("✓ Popup screenshot captured")
+                                        except Exception as ss_error:
+                                            logger.warning(f"Failed to capture popup screenshot: {ss_error}")
+
+                                        # Check if popup is a callback URL (auto-closes)
+                                        if '/callback/' in popup_url or '/idtoken/' in popup_url:
+                                            logger.info("✓ Popup is auto-login callback - will close automatically")
+                                            if update_callback:
+                                                await update_callback(2, "Auto-login popup detected, waiting for redirect...")
+
+                                            # Wait for auto-close
+                                            time.sleep(3)
+                                        else:
+                                            # Try to click "Log in as username" button
+                                            if update_callback:
+                                                await update_callback(2, "Looking for 'Log in as' button...")
+
+                                            logger.info("Searching for 'Log in as' button in popup...")
                                             try:
-                                                login_as_button = WebDriverWait(driver, 5).until(
-                                                    EC.element_to_be_clickable((By.XPATH, selector))
-                                                )
-                                                logger.info(f"Found 'Log in as' button using selector: {selector}")
-                                                login_as_button.click()
-                                                login_button_clicked = True
-                                                logger.info("✓ Clicked 'Log in as' button")
-                                                break
-                                            except:
-                                                continue
+                                                # Try multiple selectors for the "Log in as" button
+                                                login_as_selectors = [
+                                                    "//button[contains(., 'Log in as')]",
+                                                    "//span[contains(text(), 'Log in as')]",
+                                                    "//div[contains(text(), 'Log in as')]",
+                                                    "//*[contains(text(), 'Log in as')]",
+                                                ]
 
-                                        if not login_button_clicked:
-                                            logger.warning("Could not find 'Log in as' button")
+                                                for selector in login_as_selectors:
+                                                    try:
+                                                        login_as_button = WebDriverWait(driver, 3).until(
+                                                            EC.element_to_be_clickable((By.XPATH, selector))
+                                                        )
+                                                        logger.info(f"Found 'Log in as' button using selector: {selector}")
+                                                        login_as_button.click()
+                                                        login_button_clicked = True
+                                                        logger.info("✓ Clicked 'Log in as' button")
+                                                        time.sleep(3)
+                                                        break
+                                                    except:
+                                                        continue
 
-                                    except Exception as e:
-                                        logger.warning(f"Failed to click 'Log in as' button: {e}")
+                                                if not login_button_clicked:
+                                                    logger.info("No 'Log in as' button found - may auto-redirect")
 
-                                    # Wait for page to load after clicking
-                                    if login_button_clicked:
-                                        time.sleep(4)
-                                        popup_url_after_login = driver.current_url
-                                        logger.info(f"Popup URL after login: {popup_url_after_login}")
-                                        screenshot_step2_after_login = driver.get_screenshot_as_png()
-                                        logger.info("Popup screenshot after login captured")
+                                            except Exception as e:
+                                                logger.info(f"No login button needed: {e}")
+
+                                            # Try to capture screenshot after action
+                                            try:
+                                                popup_url_after_login = driver.current_url
+                                                screenshot_step2_after_login = driver.get_screenshot_as_png()
+                                                logger.info(f"Popup URL after action: {popup_url_after_login}")
+                                            except Exception as e:
+                                                logger.info(f"Popup already closed: {e}")
+
+                                    except Exception as popup_error:
+                                        logger.info(f"Popup handling completed or closed: {popup_error}")
 
                                     # Switch back to original window
-                                    driver.switch_to.window(original_window)
+                                    try:
+                                        driver.switch_to.window(original_window)
+                                        logger.info("✓ Switched back to main window")
+                                    except:
+                                        # If original window doesn't exist, use first available
+                                        available_windows = driver.window_handles
+                                        if available_windows:
+                                            driver.switch_to.window(available_windows[0])
+                                            logger.info("✓ Switched to available window")
 
-                                    # Check main window URL after login
-                                    time.sleep(2)
+                                    # Wait for redirect to complete
+                                    time.sleep(3)
                                     main_url_after_login = driver.current_url
-                                    logger.info(f"Main window URL after login: {main_url_after_login}")
+                                    logger.info(f"Main window URL after popup: {main_url_after_login}")
                                     break
                         else:
                             # No popup - check if we're already on business home
@@ -465,13 +491,32 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                             if 'business.facebook.com/latest' in main_url_after_login or 'business.facebook.com/?nav' in main_url_after_login:
                                 logger.info("✓ Already on Business home page!")
 
-                        # Take screenshot of main window
+                        # Take screenshot of main window (current state)
                         screenshot_step2_main = driver.get_screenshot_as_png()
                         logger.info("Step 2 main window screenshot captured")
+
+                    # Final check: Verify we're on business home page
+                    final_url = driver.current_url
+                    logger.info(f"Final URL: {final_url}")
+
+                    # Check if we successfully reached business home
+                    on_business_home = (
+                        'business.facebook.com/latest' in final_url or
+                        'business.facebook.com/?nav' in final_url or
+                        'business.facebook.com/home' in final_url
+                    )
+
+                    if on_business_home:
+                        logger.info("✅ Successfully reached Business Suite home page!")
+                        if update_callback:
+                            await update_callback(2, "✅ On Business Suite home page!")
+                    else:
+                        logger.info(f"⚠️ Not yet on Business home page. Current: {final_url}")
 
                     logger.info("=" * 80)
                     logger.info("STEP 2: COMPLETED - Meta Business Suite check done!")
                     logger.info(f"Flow type: {new_tab_info.get('flow_type', 'unknown')}")
+                    logger.info(f"On Business Home: {on_business_home}")
                     logger.info("=" * 80)
 
                     # Update result with step 2 data
