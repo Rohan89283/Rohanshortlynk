@@ -297,19 +297,14 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                     )
                     logger.info("✓ Page loaded")
 
-                    # Wait for interactive elements to appear (max 2s)
-                    for i in range(20):
-                        try:
-                            # Check if Instagram login button or business home is visible
-                            if driver.find_elements(By.XPATH, "//span[contains(text(), 'Log in with Instagram')]") or \
-                               'business.facebook.com/latest' in driver.current_url:
-                                logger.info(f"✓ Page ready after {i * 0.1:.1f}s")
-                                break
-                        except:
-                            pass
-                        time.sleep(0.1)
-                    else:
-                        logger.info("✓ Page load timeout - proceeding anyway")
+                    # Wait for interactive elements to appear
+                    time.sleep(1.5)
+                    try:
+                        if driver.find_elements(By.XPATH, "//span[contains(text(), 'Log in with Instagram')]") or \
+                           'business.facebook.com/latest' in driver.current_url:
+                            logger.info("✓ Page ready")
+                    except:
+                        logger.info("✓ Page load complete - proceeding")
 
                     # Log current URL
                     current_page_url = driver.current_url
@@ -378,20 +373,12 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         except Exception as e:
                             logger.warning(f"Failed to click Instagram login button: {e}")
 
-                        # Wait for popup/tab to open with detection (max 3 seconds)
+                        # Wait for popup/tab to open
                         if update_callback:
-                            await update_callback(2, "Detecting popup/new tab...")
+                            await update_callback(2, "Waiting for popup/new tab...")
 
-                        windows_after = [original_window]
-
-                        # Poll for new window with quick intervals
-                        for i in range(30):  # 30 * 0.1s = 3s max
-                            windows_after = driver.window_handles
-                            if len(windows_after) > 1:
-                                logger.info(f"✓ New window detected after {i * 0.1:.1f}s")
-                                break
-                            time.sleep(0.1)
-
+                        time.sleep(1.5)
+                        windows_after = driver.window_handles
                         logger.info(f"Windows after click: {len(windows_after)}")
 
                         # Capture current URL and page info
@@ -426,19 +413,16 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                             if update_callback:
                                                 await update_callback(2, "Auto-login popup detected, waiting for close...")
 
-                                            # Wait for popup to auto-close (max 3s)
-                                            for i in range(30):
-                                                if len(driver.window_handles) == 1:
-                                                    logger.info(f"✓ Popup auto-closed after {i * 0.1:.1f}s")
-                                                    break
-                                                time.sleep(0.1)
-                                            else:
-                                                # Force close if still open
+                                            # Wait for popup to auto-close
+                                            time.sleep(1.5)
+                                            if len(driver.window_handles) > 1:
                                                 logger.info("⚠ Force closing popup after timeout")
                                                 try:
                                                     driver.close()
                                                 except:
                                                     pass
+                                            else:
+                                                logger.info("✓ Popup auto-closed")
                                         else:
                                             # Try to click "Log in as username" button
                                             if update_callback:
@@ -466,18 +450,14 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                                         login_button_clicked = True
                                                         logger.info("✓ Clicked 'Log in as' button")
 
-                                                        # Wait for URL change or popup close (max 3s)
-                                                        for i in range(30):
-                                                            try:
-                                                                current_popup_url = driver.current_url
-                                                                if current_popup_url != url_before_click or len(driver.window_handles) == 1:
-                                                                    logger.info(f"✓ Popup action detected after {i * 0.1:.1f}s")
-                                                                    break
-                                                            except:
-                                                                # Popup closed
-                                                                logger.info(f"✓ Popup closed after {i * 0.1:.1f}s")
-                                                                break
-                                                            time.sleep(0.1)
+                                                        # Wait for URL change or popup close
+                                                        time.sleep(1.5)
+                                                        try:
+                                                            current_popup_url = driver.current_url
+                                                            if current_popup_url != url_before_click or len(driver.window_handles) == 1:
+                                                                logger.info("✓ Popup action detected")
+                                                        except:
+                                                            logger.info("✓ Popup closed")
                                                         break
                                                     except:
                                                         continue
@@ -502,14 +482,11 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                             driver.switch_to.window(available_windows[0])
                                             logger.info("✓ Switched to available window")
 
-                                    # Wait for redirect to complete by detecting business URL (max 3s)
+                                    # Wait for redirect to complete
+                                    time.sleep(1.5)
                                     main_url_after_login = driver.current_url
-                                    for i in range(30):
-                                        main_url_after_login = driver.current_url
-                                        if 'business.facebook.com' in main_url_after_login and ('/latest' in main_url_after_login or '?nav' in main_url_after_login):
-                                            logger.info(f"✓ Redirected to business home after {i * 0.1:.1f}s")
-                                            break
-                                        time.sleep(0.1)
+                                    if 'business.facebook.com' in main_url_after_login and ('/latest' in main_url_after_login or '?nav' in main_url_after_login):
+                                        logger.info("✓ Redirected to business home")
                                     logger.info(f"Main window URL after popup: {main_url_after_login}")
                                     break
                         else:
@@ -522,14 +499,11 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                 'flow_type': 'direct_no_popup'
                             }
 
-                            # Wait for redirect by detecting business URL (max 3s)
+                            # Wait for redirect
+                            time.sleep(1.5)
                             main_url_after_login = driver.current_url
-                            for i in range(30):
-                                main_url_after_login = driver.current_url
-                                if 'business.facebook.com' in main_url_after_login and ('/latest' in main_url_after_login or '?nav' in main_url_after_login):
-                                    logger.info(f"✓ Redirected to business home after {i * 0.1:.1f}s")
-                                    break
-                                time.sleep(0.1)
+                            if 'business.facebook.com' in main_url_after_login and ('/latest' in main_url_after_login or '?nav' in main_url_after_login):
+                                logger.info("✓ Redirected to business home")
                             logger.info(f"Current URL (no popup): {main_url_after_login}")
 
                             # Check if we're on business home
