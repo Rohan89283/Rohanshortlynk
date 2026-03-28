@@ -142,7 +142,7 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
         # Go to Instagram
         logger.info("Navigating to Instagram...")
         driver.get('https://www.instagram.com/')
-        time.sleep(2)
+        time.sleep(1)
 
         # Parse and add cookies
         cookies = parse_cookie_string(cookie_string)
@@ -155,7 +155,7 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
 
         # Refresh to apply cookies
         driver.refresh()
-        time.sleep(3)
+        time.sleep(2)
 
         # Check if logged in by looking for specific elements
         try:
@@ -243,8 +243,8 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                     logger.info("Navigating to Facebook Business Manager...")
                     driver.get('https://business.facebook.com/latest/home?locale=en_US')
 
-                    # Wait for page to fully load
-                    time.sleep(5)
+                    # Wait for page to fully load (reduced wait time)
+                    time.sleep(3)
 
                     # Inject anti-detection scripts and force English language
                     driver.execute_script("""
@@ -263,7 +263,7 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                     # Try to click "Log in with Instagram" button
                     try:
                         # Wait for the login page to appear
-                        WebDriverWait(driver, 15).until(
+                        WebDriverWait(driver, 10).until(
                             lambda d: d.execute_script('return document.readyState') == 'complete'
                         )
 
@@ -277,7 +277,7 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                                 if 'log in' in element.text.lower() or 'login' in element.text.lower():
                                     # Scroll to element
                                     driver.execute_script("arguments[0].scrollIntoView(true);", element)
-                                    time.sleep(1)
+                                    time.sleep(0.5)
                                     # Click using JavaScript
                                     driver.execute_script("arguments[0].click();", element)
                                     instagram_login_clicked = True
@@ -293,7 +293,7 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                                 for button in buttons:
                                     if 'instagram' in button.text.lower():
                                         driver.execute_script("arguments[0].scrollIntoView(true);", button)
-                                        time.sleep(1)
+                                        time.sleep(0.5)
                                         driver.execute_script("arguments[0].click();", button)
                                         instagram_login_clicked = True
                                         logger.info(f"Clicked Instagram login button: {button.text}")
@@ -308,7 +308,7 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                                 for element in clickable_elements:
                                     if 'instagram' in element.text.lower():
                                         driver.execute_script("arguments[0].scrollIntoView(true);", element)
-                                        time.sleep(1)
+                                        time.sleep(0.5)
                                         driver.execute_script("arguments[0].click();", element)
                                         instagram_login_clicked = True
                                         logger.info(f"Clicked Instagram login element: {element.text}")
@@ -316,18 +316,18 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
                             except Exception as e:
                                 logger.warning(f"Method 3 failed: {e}")
 
-                        # If clicked, wait longer for redirect and page load
+                        # If clicked, wait for redirect and page load
                         if instagram_login_clicked:
                             logger.info("Instagram login button clicked! Waiting for page to load...")
-                            time.sleep(8)  # Wait longer for redirect
+                            time.sleep(5)  # Reduced wait time
 
                             # Wait for page to be fully loaded
-                            WebDriverWait(driver, 15).until(
+                            WebDriverWait(driver, 10).until(
                                 lambda d: d.execute_script('return document.readyState') == 'complete'
                             )
 
                             # Additional wait for dynamic content
-                            time.sleep(3)
+                            time.sleep(2)
 
                             logger.info(f"Current URL after click: {driver.current_url}")
                         else:

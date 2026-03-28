@@ -18,7 +18,7 @@ class ProxyManager:
         if not supabase_url or not supabase_key:
             raise ValueError("Supabase credentials not found in environment")
 
-        self.supabase: Client = create_client(supabase_url, supabase_key)
+        self.supabase = create_client(supabase_url, supabase_key)
 
     def add_proxies(self, user_id: int, proxies: List[Dict]) -> Dict:
         """Add validated proxies to database"""
