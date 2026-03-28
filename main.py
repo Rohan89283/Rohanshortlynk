@@ -114,15 +114,18 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         total_posts = result.get('total_posts', 'N/A')
         location = result.get('location', 'N/A')
 
-        step1_status = "✅" if result['valid'] else "❌"
-        step1_text = "Completed" if result['valid'] else "Failed"
+        step1_status = "✅" if result.get('step1_complete', False) else "❌"
+        step1_text = "Completed" if result.get('step1_complete', False) else "Failed"
+
+        step2_status = "✅" if result.get('step2_complete', False) else "❌"
+        step2_text = "Completed" if result.get('step2_complete', False) else "Failed" if result.get('step1_complete', False) else "Pending"
 
         final_status = (
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             "🔍 *INSTAGRAM COOKIE CHECKER*\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"📋 *Step 1:* Login Check {step1_status} {step1_text}\n"
-            f"📋 *Step 2:* Profile Info ⏸️ Pending\n"
+            f"📋 *Step 2:* Profile Info {step2_status} {step2_text}\n"
             f"📋 *Step 3:* Post Count ⏸️ Pending\n\n"
             f"⏱️ *Time:* {elapsed}s\n"
             f"🌐 *Proxy:* {proxy_used}\n"
@@ -142,6 +145,12 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_photo(
                 photo=BytesIO(result['screenshot']),
                 caption=f"📸 Step 1 Screenshot - Login Check"
+            )
+
+        if result.get('screenshot_step2'):
+            await update.message.reply_photo(
+                photo=BytesIO(result['screenshot_step2']),
+                caption=f"📸 Step 2 Screenshot - Facebook Business Manager"
             )
 
     except Exception as e:

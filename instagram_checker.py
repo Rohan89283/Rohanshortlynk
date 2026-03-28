@@ -33,7 +33,7 @@ def parse_cookie_string(cookie_string: str) -> list:
             })
     return cookies
 
-def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, proxy_info: Optional[Dict] = None) -> dict:
+def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, proxy_info: Optional[Dict] = None, update_callback=None) -> dict:
     """
     Check Instagram cookie validity and return screenshot
 
@@ -41,6 +41,7 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
         cookie_string: Instagram cookies string
         user_id: Telegram user ID (for proxy rotation)
         proxy_info: Optional proxy dict (if None, will fetch from database)
+        update_callback: Optional callback function for status updates
 
     Returns: dict with 'valid' (bool), 'screenshot' (bytes), 'message' (str), 'proxy_used' (str)
     """
@@ -181,8 +182,8 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
             else:
                 location = "Direct Connection"
 
-            # Take screenshot
-            screenshot = driver.get_screenshot_as_png()
+            # Take screenshot for Step 1
+            screenshot_step1 = driver.get_screenshot_as_png()
 
             # Update proxy success
             if proxy_manager and active_proxy:
@@ -190,16 +191,42 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
 
             proxy_used = f"{proxy_info['host']}:{proxy_info['port']}" if proxy_info else "Direct"
 
-            return {
+            result = {
                 'valid': is_logged_in,
-                'screenshot': screenshot,
+                'screenshot': screenshot_step1,
+                'screenshot_step2': None,
                 'message': message,
                 'url': current_url,
                 'proxy_used': proxy_used,
                 'username': username,
                 'total_posts': total_posts,
-                'location': location
+                'location': location,
+                'step1_complete': is_logged_in,
+                'step2_complete': False
             }
+
+            # If login successful, proceed to Step 2 - Facebook Business Manager
+            if is_logged_in:
+                try:
+                    logger.info("Step 1 completed. Starting Step 2 - Facebook Business Manager...")
+
+                    # Navigate to Facebook Business Manager
+                    driver.get('https://business.facebook.com/latest/home')
+                    time.sleep(5)  # Wait for page to load
+
+                    # Take screenshot for Step 2
+                    screenshot_step2 = driver.get_screenshot_as_png()
+
+                    result['screenshot_step2'] = screenshot_step2
+                    result['step2_complete'] = True
+
+                    logger.info("Step 2 completed - Facebook Business Manager loaded")
+
+                except Exception as e:
+                    logger.warning(f"Step 2 failed: {e}")
+                    result['step2_complete'] = False
+
+            return result
 
         except TimeoutException:
             screenshot = driver.get_screenshot_as_png()
@@ -212,12 +239,15 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
             return {
                 'valid': False,
                 'screenshot': screenshot,
+                'screenshot_step2': None,
                 'message': "Timeout while checking login status",
                 'url': driver.current_url,
                 'proxy_used': proxy_used,
                 'username': 'N/A',
                 'total_posts': 'N/A',
-                'location': location
+                'location': location,
+                'step1_complete': False,
+                'step2_complete': False
             }
 
     except WebDriverException as e:
@@ -231,12 +261,15 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
         return {
             'valid': False,
             'screenshot': None,
+            'screenshot_step2': None,
             'message': f"Browser error: {str(e)[:100]}",
             'url': None,
             'proxy_used': proxy_used,
             'username': 'N/A',
             'total_posts': 'N/A',
-            'location': location
+            'location': location,
+            'step1_complete': False,
+            'step2_complete': False
         }
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
@@ -249,12 +282,15 @@ def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = None, pr
         return {
             'valid': False,
             'screenshot': None,
+            'screenshot_step2': None,
             'message': f"Error: {str(e)[:100]}",
             'url': None,
             'proxy_used': proxy_used,
             'username': 'N/A',
             'total_posts': 'N/A',
-            'location': location
+            'location': location,
+            'step1_complete': False,
+            'step2_complete': False
         }
     finally:
         if driver:
