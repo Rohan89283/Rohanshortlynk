@@ -114,6 +114,9 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         step2_total_windows = result.get('step2_new_tab_info', {}).get('total_windows', 1)
         step2_login_clicked = result.get('step2_login_button_clicked', False)
 
+        # Get Step 3 details
+        step3_get_started_clicked = result.get('step3_get_started_clicked', False)
+
         final_status = (
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             "🔍 *INSTAGRAM COOKIE CHECKER*\n"
@@ -126,7 +129,8 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🔘 *IG Button Clicked:* {'Yes' if step2_clicked else 'No'}\n"
             f"🪟 *New Tab/Popup:* {'Yes' if step2_new_tab else 'No'}\n"
             f"🔑 *Login Button Clicked:* {'Yes' if step2_login_clicked else 'No'}\n"
-            f"📱 *Total Windows:* {step2_total_windows}\n\n"
+            f"📱 *Total Windows:* {step2_total_windows}\n"
+            f"🚀 *Get Started Clicked:* {'Yes' if step3_get_started_clicked else 'No'}\n\n"
         )
 
         if result['valid']:

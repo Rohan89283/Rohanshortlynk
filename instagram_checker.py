@@ -543,7 +543,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                     result['step2_new_tab_info'] = new_tab_info
                     result['step2_on_business_home'] = on_business_home
 
-                    # STEP 3: Navigate to Ad Center
+                    # STEP 3: Navigate to Ad Center and click Get started
                     logger.info("=" * 80)
                     logger.info("STARTING STEP 3: Ad Center Navigation")
                     logger.info("=" * 80)
@@ -593,13 +593,62 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         else:
                             logger.info(f"⚠️ May not be on Ad Center. Current: {ad_center_final_url}")
 
+                        # Try to find and click "Get started" button
+                        get_started_clicked = False
+                        if update_callback:
+                            await update_callback(3, "Looking for 'Get started' button...")
+
+                        logger.info("Searching for 'Get started' button...")
+                        try:
+                            # Try multiple selectors for the "Get started" button
+                            possible_selectors = [
+                                "//span[contains(text(), 'Get started')]",
+                                "//div[contains(text(), 'Get started')]",
+                                "//button[contains(., 'Get started')]",
+                                "//a[contains(., 'Get started')]",
+                            ]
+
+                            for selector in possible_selectors:
+                                try:
+                                    get_started_button = WebDriverWait(driver, 5).until(
+                                        EC.element_to_be_clickable((By.XPATH, selector))
+                                    )
+                                    logger.info(f"Found 'Get started' button using selector: {selector}")
+
+                                    # Click the button
+                                    get_started_button.click()
+                                    get_started_clicked = True
+                                    logger.info("✓ Clicked 'Get started' button")
+
+                                    if update_callback:
+                                        await update_callback(3, "Clicked 'Get started', waiting for page...")
+
+                                    # Wait for page to load after click
+                                    time.sleep(5)
+
+                                    # Update URL after click
+                                    ad_center_final_url = driver.current_url
+                                    logger.info(f"URL after 'Get started' click: {ad_center_final_url}")
+
+                                    break
+                                except Exception as e:
+                                    logger.debug(f"Selector {selector} did not work: {e}")
+                                    continue
+
+                            if not get_started_clicked:
+                                logger.info("No 'Get started' button found - may already be past initial screen")
+
+                        except Exception as e:
+                            logger.warning(f"Failed to click 'Get started' button: {e}")
+
                         # Take screenshot at END of Step 3
                         screenshot_step3 = driver.get_screenshot_as_png()
-                        logger.info("✓ Step 3 screenshot captured (Ad Center page)")
+                        logger.info("✓ Step 3 screenshot captured (Ad Center page after Get started)")
 
                         logger.info("=" * 80)
                         logger.info("STEP 3: COMPLETED - Ad Center check done!")
                         logger.info(f"On Ad Center: {on_ad_center}")
+                        logger.info(f"Get started clicked: {get_started_clicked}")
                         logger.info("=" * 80)
 
                         # Update result with step 3 data
@@ -607,6 +656,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         result['step3_complete'] = True
                         result['step3_current_url'] = ad_center_final_url
                         result['step3_on_ad_center'] = on_ad_center
+                        result['step3_get_started_clicked'] = get_started_clicked
 
                     except Exception as e:
                         logger.error(f"Step 3 failed: {e}", exc_info=True)
