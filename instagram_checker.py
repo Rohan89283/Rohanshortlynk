@@ -112,8 +112,8 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
         }
         chrome_options.add_experimental_option('prefs', prefs)
 
-        # Use eager page load strategy for faster loading
-        chrome_options.page_load_strategy = 'eager'
+        # Use none page load strategy for maximum speed
+        chrome_options.page_load_strategy = 'none'
 
         # Add binary location
         chrome_options.binary_location = '/usr/bin/google-chrome'
@@ -157,7 +157,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
         driver.get('https://www.instagram.com/')
 
         # Wait for initial page load
-        WebDriverWait(driver, 5).until(
+        WebDriverWait(driver, 3).until(
             lambda d: d.execute_script('return document.readyState') == 'complete'
         )
 
@@ -177,8 +177,8 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
         # Check if logged in by looking for specific elements
         try:
-            # Wait for page to load (reduced timeout)
-            WebDriverWait(driver, 4).until(
+            # Wait for page to load (minimal timeout)
+            WebDriverWait(driver, 2).until(
                 lambda d: d.execute_script('return document.readyState') == 'complete'
             )
 
@@ -292,11 +292,11 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                     # Wait for page to load
                     logger.info("Waiting for page to load completely...")
-                    WebDriverWait(driver, 6).until(
+                    WebDriverWait(driver, 4).until(
                         lambda d: d.execute_script('return document.readyState') == 'complete'
                     )
                     logger.info("✓ Page loaded")
-                    time.sleep(1)
+                    time.sleep(0.5)
                     logger.info("✓ Additional wait complete")
 
                     # Log current URL
@@ -343,7 +343,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                             for selector in possible_selectors:
                                 try:
-                                    instagram_button = WebDriverWait(driver, 5).until(
+                                    instagram_button = WebDriverWait(driver, 3).until(
                                         EC.element_to_be_clickable((By.XPATH, selector))
                                     )
                                     logger.info(f"Found Instagram login button using selector: {selector}")
@@ -367,7 +367,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                             logger.warning(f"Failed to click Instagram login button: {e}")
 
                         # Wait a moment for any popups/tabs to open
-                        time.sleep(1.5)
+                        time.sleep(0.8)
 
                         if update_callback:
                             await update_callback(2, "Checking for popup/new tab...")
@@ -409,7 +409,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                                 await update_callback(2, "Auto-login popup detected, waiting for redirect...")
 
                                             # Wait for auto-close
-                                            time.sleep(1.5)
+                                            time.sleep(0.8)
                                         else:
                                             # Try to click "Log in as username" button
                                             if update_callback:
@@ -427,14 +427,14 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
 
                                                 for selector in login_as_selectors:
                                                     try:
-                                                        login_as_button = WebDriverWait(driver, 2).until(
+                                                        login_as_button = WebDriverWait(driver, 1.5).until(
                                                             EC.element_to_be_clickable((By.XPATH, selector))
                                                         )
                                                         logger.info(f"Found 'Log in as' button using selector: {selector}")
                                                         login_as_button.click()
                                                         login_button_clicked = True
                                                         logger.info("✓ Clicked 'Log in as' button")
-                                                        time.sleep(1.5)
+                                                        time.sleep(0.8)
                                                         break
                                                     except:
                                                         continue
@@ -460,7 +460,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                             logger.info("✓ Switched to available window")
 
                                     # Wait for redirect to complete
-                                    time.sleep(1.5)
+                                    time.sleep(0.8)
                                     main_url_after_login = driver.current_url
                                     logger.info(f"Main window URL after popup: {main_url_after_login}")
                                     break
@@ -475,7 +475,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                             }
 
                             # Wait a bit for any redirect
-                            time.sleep(1.5)
+                            time.sleep(0.8)
                             main_url_after_login = driver.current_url
                             logger.info(f"Current URL (no popup): {main_url_after_login}")
 
