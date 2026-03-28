@@ -98,7 +98,6 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elapsed = int(time.time() - start_time)
         username = result.get('username', 'N/A')
-        total_posts = result.get('total_posts', 'N/A')
 
         step1_status = "✅" if result.get('step1_complete', False) else "❌"
         step1_text = "Completed" if result.get('step1_complete', False) else "Failed"
