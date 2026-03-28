@@ -255,6 +255,83 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                 logger.info("STEP 1: COMPLETED - Instagram login successful!")
                 logger.info("=" * 80)
 
+                # STEP 2: Navigate to profile and get post count
+                try:
+                    if update_callback:
+                        await update_callback(2, "Navigating to profile...")
+
+                    logger.info("STEP 2: Navigating to user profile...")
+
+                    # Navigate to profile page
+                    profile_url = f"https://www.instagram.com/{username}/"
+                    driver.get(profile_url)
+
+                    # Wait for profile page to load
+                    WebDriverWait(driver, 8).until(
+                        lambda d: d.execute_script('return document.readyState') == 'complete'
+                    )
+
+                    if update_callback:
+                        await update_callback(2, "Extracting post count...")
+
+                    # Try to extract post count
+                    time.sleep(2)  # Give page time to render
+
+                    try:
+                        import re
+                        page_source = driver.page_source
+
+                        # Look for post count in various formats
+                        post_patterns = [
+                            r'"edge_owner_to_timeline_media":{"count":(\d+)',
+                            r'"edge_felix_video_timeline":{"count":(\d+)',
+                            r'<meta\s+content="(\d+[KMB]?)\s+Posts',
+                            r'<span[^>]*>(\d+(?:,\d{3})*)\s+posts</span>',
+                        ]
+
+                        for pattern in post_patterns:
+                            match = re.search(pattern, page_source, re.IGNORECASE)
+                            if match:
+                                total_posts = match.group(1).replace(',', '')
+                                logger.info(f"Found post count: {total_posts}")
+                                break
+
+                        # If still N/A, try to find it in the page text
+                        if total_posts == "N/A":
+                            # Look for the post count element
+                            try:
+                                post_element = WebDriverWait(driver, 5).until(
+                                    EC.presence_of_element_located((By.XPATH, "//span[contains(text(), 'posts')]"))
+                                )
+                                post_text = post_element.text
+                                post_count_match = re.search(r'(\d+(?:,\d{3})*)', post_text)
+                                if post_count_match:
+                                    total_posts = post_count_match.group(1).replace(',', '')
+                            except:
+                                pass
+
+                    except Exception as e:
+                        logger.warning(f"Failed to extract post count: {e}")
+
+                    # Take screenshot for Step 2
+                    screenshot_step2 = driver.get_screenshot_as_png()
+                    logger.info("Step 2 screenshot captured")
+
+                    logger.info("=" * 80)
+                    logger.info("STEP 2: COMPLETED - Profile data extracted!")
+                    logger.info("=" * 80)
+
+                    # Update result with step 2 data
+                    result['total_posts'] = total_posts
+                    result['screenshot_step2'] = screenshot_step2
+                    result['step2_complete'] = True
+                    result['profile_url'] = profile_url
+
+                except Exception as e:
+                    logger.error(f"Step 2 failed: {e}")
+                    result['step2_complete'] = False
+                    result['screenshot_step2'] = None
+
             return result
 
         except TimeoutException:

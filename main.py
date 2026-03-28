@@ -67,7 +67,8 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "━━━━━━━━━━━━━━━━━━━━━━\n"
         "🔍 *INSTAGRAM COOKIE CHECKER*\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "📋 *Step 1:* Instagram Login ⏳\n\n"
+        "📋 *Step 1:* Instagram Login ⏳\n"
+        "📋 *Step 2:* Profile Data ⏸️\n\n"
         "⏱️ *Time:* 0s\n"
         "👤 *Username:* N/A\n\n"
         "🔄 Initializing browser...",
@@ -83,7 +84,8 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
                 "🔍 *INSTAGRAM COOKIE CHECKER*\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"📋 *Step 1:* Instagram Login {'✅' if step > 1 else '⏳' if step == 1 else '⏸️'}\n\n"
+                f"📋 *Step 1:* Instagram Login {'✅' if step > 1 else '⏳' if step == 1 else '⏸️'}\n"
+                f"📋 *Step 2:* Profile Data {'✅' if step > 2 else '⏳' if step == 2 else '⏸️'}\n\n"
                 f"⏱️ *Time:* {elapsed}s\n\n"
                 f"🔄 {status_text}",
                 parse_mode='Markdown'
@@ -101,11 +103,15 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         step1_status = "✅" if result.get('step1_complete', False) else "❌"
         step1_text = "Completed" if result.get('step1_complete', False) else "Failed"
 
+        step2_status = "✅" if result.get('step2_complete', False) else "❌"
+        step2_text = "Completed" if result.get('step2_complete', False) else "Failed"
+
         final_status = (
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             "🔍 *INSTAGRAM COOKIE CHECKER*\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"📋 *Step 1:* Instagram Login {step1_status} {step1_text}\n\n"
+            f"📋 *Step 1:* Instagram Login {step1_status} {step1_text}\n"
+            f"📋 *Step 2:* Profile Data {step2_status} {step2_text}\n\n"
             f"⏱️ *Time:* {elapsed}s\n"
             f"👤 *Username:* {username}\n"
             f"📊 *Total Posts:* {total_posts}\n\n"
@@ -118,11 +124,18 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await status_msg.edit_text(final_status, parse_mode='Markdown')
 
-        # Send screenshot
+        # Send screenshot for Step 1
         if result.get('screenshot'):
             await update.message.reply_photo(
                 photo=BytesIO(result['screenshot']),
                 caption=f"📸 Step 1 - Instagram Login"
+            )
+
+        # Send screenshot for Step 2
+        if result.get('screenshot_step2'):
+            await update.message.reply_photo(
+                photo=BytesIO(result['screenshot_step2']),
+                caption=f"📸 Step 2 - Profile Page (@{username})"
             )
 
     except Exception as e:
@@ -133,7 +146,8 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             "🔍 *INSTAGRAM COOKIE CHECKER*\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            "📋 *Step 1:* Instagram Login ❌ Error\n\n"
+            "📋 *Step 1:* Instagram Login ❌ Error\n"
+            "📋 *Step 2:* Profile Data ⏸️ Skipped\n\n"
             f"⏱️ *Time:* {elapsed}s\n"
             "👤 *Username:* N/A\n"
             "📊 *Total Posts:* N/A\n\n"
