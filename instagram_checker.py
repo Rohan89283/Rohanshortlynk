@@ -92,15 +92,17 @@ async def check_instagram_cookie(cookie_string: str, user_id=None, proxy_info=No
         # Step 2: Navigate to Facebook Business Suite and click "Login with Instagram"
         step2_success = False
         step2_status = ""
+        screenshots = []
 
         if update_callback:
-            await update_callback(2, "Navigating to Facebook Business Suite...")
+            await update_callback(2, "Navigating to Facebook Business login page...")
 
         try:
             import time
             from selenium.webdriver.common.by import By
 
-            driver.get('https://business.facebook.com/latest/home')
+            # Navigate to the specific Facebook Business login URL
+            driver.get('https://business.facebook.com/business/loginpage/?next=https%3A%2F%2Fbusiness.facebook.com%2F%3Fnav_ref%3Dbiz_unified_f3_login_page_to_mbs&login_options%5B0%5D=FB&login_options%5B1%5D=IG&login_options%5B2%5D=SSO&config_ref=biz_login_tool_flavor_mbs')
 
             time.sleep(3)
 
@@ -109,56 +111,116 @@ async def check_instagram_cookie(cookie_string: str, user_id=None, proxy_info=No
             )
 
             if update_callback:
-                await update_callback(2, "Looking for 'Login with Instagram' button...")
+                await update_callback(2, "Taking screenshot before clicking...")
 
             time.sleep(2)
 
-            # Try to find and click the Instagram login button
-            login_button_found = False
-            try:
-                # Try finding by text content
-                buttons = driver.find_elements(By.TAG_NAME, "button")
-                links = driver.find_elements(By.TAG_NAME, "a")
-                all_clickable = buttons + links
+            # Take screenshot before clicking
+            screenshot_before = driver.get_screenshot_as_png()
+            screenshots.append(('before_click.png', screenshot_before))
 
-                for element in all_clickable:
+            if update_callback:
+                await update_callback(2, "Looking for 'Log in with Instagram' button...")
+
+            # Try to find and click the Instagram login button by span text
+            login_button_found = False
+            popup_detected = False
+
+            try:
+                # Store initial window handles
+                initial_windows = driver.window_handles
+                initial_window_count = len(initial_windows)
+
+                # Try to find the span with the specific text
+                spans = driver.find_elements(By.TAG_NAME, "span")
+
+                for span in spans:
                     try:
-                        text = element.text.lower()
-                        if 'instagram' in text and ('login' in text or 'log in' in text or 'continue' in text):
+                        text = span.text.strip()
+                        if text == "Log in with Instagram":
                             if update_callback:
-                                await update_callback(2, "Clicking 'Login with Instagram'...")
-                            element.click()
+                                await update_callback(2, "Found button! Clicking...")
+
+                            # Try to click the span or its parent
+                            try:
+                                span.click()
+                            except:
+                                # If span click fails, try parent element
+                                parent = span.find_element(By.XPATH, "..")
+                                parent.click()
+
                             login_button_found = True
-                            time.sleep(3)
+                            time.sleep(2)
+
+                            # Check for new windows/tabs
+                            current_windows = driver.window_handles
+                            if len(current_windows) > initial_window_count:
+                                popup_detected = True
+                                if update_callback:
+                                    await update_callback(2, "Popup/new tab detected! Taking screenshot...")
+
+                                # Switch to new window
+                                for window in current_windows:
+                                    if window not in initial_windows:
+                                        driver.switch_to.window(window)
+                                        time.sleep(1)
+                                        screenshot_popup = driver.get_screenshot_as_png()
+                                        screenshots.append(('popup.png', screenshot_popup))
+                                        break
+
+                                step2_status = "Clicked successfully - Popup detected"
+                            else:
+                                # Take screenshot of same page after click
+                                time.sleep(1)
+                                screenshot_after = driver.get_screenshot_as_png()
+                                screenshots.append(('after_click.png', screenshot_after))
+                                step2_status = "Clicked successfully - No popup detected"
+
                             step2_success = True
-                            step2_status = "Successfully clicked 'Login with Instagram'"
                             break
                     except:
                         continue
 
                 if not login_button_found:
-                    # Try JavaScript click
+                    # Try JavaScript click as fallback
                     clicked = driver.execute_script("""
-                        const elements = [...document.querySelectorAll('button, a, span, div[role="button"]')];
-                        for (const el of elements) {
-                            const text = el.textContent.toLowerCase();
-                            if (text.includes('instagram') && (text.includes('login') || text.includes('log in') || text.includes('continue'))) {
-                                el.click();
+                        const spans = document.querySelectorAll('span');
+                        for (const span of spans) {
+                            if (span.textContent.trim() === 'Log in with Instagram') {
+                                span.click();
                                 return true;
                             }
                         }
                         return false;
                     """)
+
                     if clicked:
-                        time.sleep(3)
+                        time.sleep(2)
+
+                        # Check for new windows/tabs
+                        current_windows = driver.window_handles
+                        if len(current_windows) > initial_window_count:
+                            popup_detected = True
+                            for window in current_windows:
+                                if window not in initial_windows:
+                                    driver.switch_to.window(window)
+                                    time.sleep(1)
+                                    screenshot_popup = driver.get_screenshot_as_png()
+                                    screenshots.append(('popup.png', screenshot_popup))
+                                    break
+                            step2_status = "Clicked (JS) - Popup detected"
+                        else:
+                            screenshot_after = driver.get_screenshot_as_png()
+                            screenshots.append(('after_click.png', screenshot_after))
+                            step2_status = "Clicked (JS) - No popup detected"
+
                         step2_success = True
-                        step2_status = "Successfully clicked 'Login with Instagram' (JS)"
                     else:
-                        step2_status = "Could not find 'Login with Instagram' button"
+                        step2_status = "Could not find 'Log in with Instagram' button"
 
             except Exception as e:
                 logger.warning(f"Error finding/clicking button: {e}")
-                step2_status = f"Error finding button: {str(e)[:100]}"
+                step2_status = f"Error: {str(e)[:100]}"
 
         except Exception as e:
             logger.warning(f"Error in Step 2: {e}")
@@ -167,6 +229,7 @@ async def check_instagram_cookie(cookie_string: str, user_id=None, proxy_info=No
         return {
             'valid': is_logged_in,
             'screenshot': None,
+            'screenshots': screenshots,
             'message': f"Valid cookie - Logged in! Step 2: {step2_status}",
             'username': username,
             'url': current_url,

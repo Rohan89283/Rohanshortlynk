@@ -51,10 +51,26 @@ async def handle_cookie(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🌐 URL: {result.get('url', 'N/A')}\n\n"
             f"📋 Step 2: {result.get('step2_status', 'Not run')}"
         )
+
+        # Send screenshots if available
+        screenshots = result.get('screenshots', [])
+        if screenshots:
+            await status_message.edit_text(response + f"\n\n📸 Sending {len(screenshots)} screenshot(s)...")
+            for filename, screenshot_data in screenshots:
+                try:
+                    screenshot_io = BytesIO(screenshot_data)
+                    screenshot_io.name = filename
+                    await update.message.reply_photo(
+                        photo=screenshot_io,
+                        caption=f"📸 {filename}"
+                    )
+                except Exception as e:
+                    logger.error(f"Error sending screenshot {filename}: {e}")
+
+        await status_message.edit_text(response)
     else:
         response = f"❌ Cookie is INVALID\n\n{result['message']}"
-
-    await status_message.edit_text(response)
+        await status_message.edit_text(response)
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle errors"""
