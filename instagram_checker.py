@@ -135,12 +135,10 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
             return {
                 'valid': False,
                 'screenshot': None,
-                'screenshot_step2': None,
-                'screenshot_oauth': None,
-                'screenshot_step3': None,
                 'message': f"Chrome initialization failed: {str(e)[:100]}",
                 'url': None,
-                'proxy_used': f"{proxy_info['host']}:{proxy_info['port']}" if proxy_info else "Direct"
+                'proxy_used': f"{proxy_info['host']}:{proxy_info['port']}" if proxy_info else "Direct",
+                'step1_complete': False
             }
 
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
@@ -242,544 +240,20 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
             result = {
                 'valid': is_logged_in,
                 'screenshot': screenshot_step1,
-                'screenshot_step2_before': None,
-                'screenshot_step2_after_click': None,
-                'screenshot_oauth_before': None,
-                'screenshot_oauth_after': None,
-                'screenshot_step2': None,
-                'screenshot_oauth': None,
-                'screenshot_step3': None,
                 'message': message,
                 'url': current_url,
                 'proxy_used': proxy_used,
                 'username': username,
                 'total_posts': total_posts,
                 'location': location,
-                'step1_complete': is_logged_in,
-                'step2_complete': False,
-                'step2_method': None,
-                'step2_button_html': None,
-                'step2_click_technique': None,
-                'step2_urls_visited': [],
-                'step3_complete': False
+                'step1_complete': is_logged_in
             }
 
-            # If login successful, proceed to Step 2 - Facebook Business Manager
+            # Login check complete
             if is_logged_in:
-                try:
-                    logger.info("=" * 80)
-                    logger.info("STEP 2: Facebook Business Manager - STARTING")
-                    logger.info("=" * 80)
-
-                    if update_callback:
-                        await update_callback(2, "Navigating to Meta Business...")
-
-                    # Navigate to Facebook Business Manager with English locale
-                    logger.info("Navigating to: https://business.facebook.com/latest/home?locale=en_US")
-                    driver.get('https://business.facebook.com/latest/home?locale=en_US')
-
-                    # Wait for page to fully load
-                    WebDriverWait(driver, 10).until(
-                        lambda d: d.execute_script('return document.readyState') == 'complete'
-                    )
-
-                    # Get initial URL
-                    initial_url = driver.current_url
-                    logger.info(f"Initial URL after navigation: {initial_url}")
-
-                    # Take screenshot before any interaction
-                    try:
-                        screenshot_before = driver.get_screenshot_as_png()
-                        result['screenshot_step2_before'] = screenshot_before
-                        logger.info("Screenshot captured BEFORE looking for Instagram login")
-                    except Exception as e:
-                        logger.warning(f"Failed to capture before screenshot: {e}")
-
-                    # Inject anti-detection scripts and force English language
-                    driver.execute_script("""
-                        Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-                        Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
-                        Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
-                        Object.defineProperty(navigator, 'language', {get: () => 'en-US'});
-
-                        // Force locale to English
-                        if (window.localStorage) {
-                            window.localStorage.setItem('locale', 'en_US');
-                            window.localStorage.setItem('_js_datr', 'en_US');
-                        }
-                    """)
-
-                    # Try to click "Log in with Instagram" button
-                    try:
-                        if update_callback:
-                            await update_callback(2, "Looking for Instagram login...")
-
-                        # Wait for any dynamic content to load
-                        time.sleep(2)
-
-                        logger.info("Searching for Instagram login button with ALL methods...")
-
-                        # Store all found elements
-                        instagram_elements = []
-                        instagram_login_clicked = False
-                        successful_method = None
-
-                        # Helper function to strictly filter Instagram login elements (NOT Facebook)
-                        def is_instagram_login_only(text, aria_label=None):
-                            """Check if this is Instagram login button and NOT Facebook"""
-                            if not text and not aria_label:
-                                return False
-
-                            combined_text = f"{text or ''} {aria_label or ''}".lower()
-
-                            # MUST contain "instagram"
-                            if 'instagram' not in combined_text:
-                                return False
-
-                            # MUST NOT contain "facebook" or "fb"
-                            if 'facebook' in combined_text or ' fb ' in combined_text:
-                                logger.info(f"  ❌ REJECTED (contains Facebook/FB): '{text}'")
-                                return False
-
-                            # Should contain login-related words
-                            has_login = any(word in combined_text for word in ['log in', 'login', 'sign in', 'signin'])
-
-                            if has_login:
-                                logger.info(f"  ✅ ACCEPTED: '{text}'")
-                                return True
-
-                            return False
-
-                        # METHOD 1: Exact text "Log in with Instagram" (HIGHEST PRIORITY)
-                        logger.info("METHOD 1: Searching for EXACT text 'Log in with Instagram'...")
-                        try:
-                            elements = driver.find_elements(By.XPATH,
-                                "//*[normalize-space(text())='Log in with Instagram']"
-                            )
-                            logger.info(f"Found {len(elements)} elements with EXACT text")
-                            for idx, elem in enumerate(elements):
-                                try:
-                                    if elem.is_displayed():
-                                        text = elem.text
-                                        if is_instagram_login_only(text):
-                                            # Prioritize this by adding it first
-                                            instagram_elements.insert(0, ('METHOD1-EXACT', idx, elem, text))
-                                            logger.info(f"  🎯 PRIORITY Element {idx}: text='{text}'")
-                                except:
-                                    pass
-                        except Exception as e:
-                            logger.warning(f"METHOD 1 search failed: {e}")
-
-                        # METHOD 2: Contains "Log in with Instagram" (partial match)
-                        logger.info("METHOD 2: Searching for text containing 'Log in with Instagram'...")
-                        try:
-                            elements = driver.find_elements(By.XPATH,
-                                "//*[contains(normalize-space(text()), 'Log in with Instagram')]"
-                            )
-                            logger.info(f"Found {len(elements)} elements with partial match")
-                            for idx, elem in enumerate(elements):
-                                try:
-                                    if elem.is_displayed():
-                                        text = elem.text
-                                        if is_instagram_login_only(text):
-                                            instagram_elements.append(('METHOD2-CONTAINS', idx, elem, text))
-                                            logger.info(f"  ✅ Element {idx}: text='{text}'")
-                                except:
-                                    pass
-                        except Exception as e:
-                            logger.warning(f"METHOD 2 search failed: {e}")
-
-                        # METHOD 3: Buttons/links with "Instagram" AND "log in" (NO Facebook)
-                        logger.info("METHOD 3: Searching for Instagram login buttons (strict filter)...")
-                        try:
-                            elements = driver.find_elements(By.XPATH,
-                                "//button[contains(translate(., 'INSTAGRAM', 'instagram'), 'instagram') and "
-                                "contains(translate(., 'LOG IN', 'log in'), 'log in')] | "
-                                "//a[contains(translate(., 'INSTAGRAM', 'instagram'), 'instagram') and "
-                                "contains(translate(., 'LOG IN', 'log in'), 'log in')] | "
-                                "//div[@role='button' and contains(translate(., 'INSTAGRAM', 'instagram'), 'instagram') and "
-                                "contains(translate(., 'LOG IN', 'log in'), 'log in')]"
-                            )
-                            logger.info(f"Found {len(elements)} Instagram + Login elements")
-                            for idx, elem in enumerate(elements):
-                                try:
-                                    if elem.is_displayed():
-                                        text = elem.text
-                                        # Strict filter - MUST pass
-                                        if is_instagram_login_only(text):
-                                            instagram_elements.append(('METHOD3-STRICT', idx, elem, text))
-                                except:
-                                    pass
-                        except Exception as e:
-                            logger.warning(f"METHOD 3 search failed: {e}")
-
-                        # METHOD 4: aria-label with "Instagram" (NO Facebook)
-                        logger.info("METHOD 4: Searching for aria-label with Instagram...")
-                        try:
-                            elements = driver.find_elements(By.XPATH,
-                                "//*[contains(translate(@aria-label, 'INSTAGRAM', 'instagram'), 'instagram')]"
-                            )
-                            logger.info(f"Found {len(elements)} elements with Instagram in aria-label")
-                            for idx, elem in enumerate(elements):
-                                try:
-                                    if elem.is_displayed():
-                                        aria_label = elem.get_attribute('aria-label')
-                                        text = elem.text
-                                        if is_instagram_login_only(text, aria_label):
-                                            instagram_elements.append(('METHOD4-ARIA', idx, elem, text or aria_label))
-                                except:
-                                    pass
-                        except Exception as e:
-                            logger.warning(f"METHOD 4 search failed: {e}")
-
-                        # Log all found elements with their text
-                        logger.info(f"\n📊 Total FILTERED Instagram login elements: {len(instagram_elements)}")
-                        for method, idx, elem, text in instagram_elements:
-                            logger.info(f"  - {method}[{idx}]: '{text}'")
-
-                        # Track URLs visited
-                        urls_visited = [driver.current_url]
-
-                        # Now try clicking each element with DIFFERENT click methods
-                        for method_name, idx, element, text in instagram_elements:
-                            if instagram_login_clicked:
-                                break
-
-                            logger.info(f"\n{'='*60}")
-                            logger.info(f"Attempting: {method_name}[{idx}] - '{text}'")
-                            logger.info(f"{'='*60}")
-
-                            # Get button outerHTML for debugging
-                            try:
-                                button_html = element.get_attribute('outerHTML')
-                                logger.info(f"Button HTML: {button_html[:300]}...")
-                                result['step2_button_html'] = button_html
-                            except Exception as e:
-                                logger.warning(f"Failed to get button HTML: {e}")
-
-                            # Remove any overlays that might block the click
-                            try:
-                                driver.execute_script("""
-                                    // Remove any overlays or blocking elements
-                                    var overlays = document.querySelectorAll('[class*="overlay"], [class*="modal"], [class*="popup"]');
-                                    overlays.forEach(el => el.style.display = 'none');
-                                """)
-                            except:
-                                pass
-
-                            # CLICK TECHNIQUE 1: JavaScript click with force
-                            try:
-                                logger.info("  🖱️  TECHNIQUE 1: JavaScript click (forced)")
-
-                                # Make element visible and clickable
-                                driver.execute_script("""
-                                    arguments[0].style.display = 'block';
-                                    arguments[0].style.visibility = 'visible';
-                                    arguments[0].style.pointerEvents = 'auto';
-                                """, element)
-
-                                # Scroll to element
-                                driver.execute_script("arguments[0].scrollIntoView({behavior: 'auto', block: 'center'});", element)
-                                time.sleep(1)
-
-                                old_url = driver.current_url
-                                logger.info(f"  URL before click: {old_url}")
-
-                                # Force click with JavaScript
-                                driver.execute_script("arguments[0].click();", element)
-
-                                # Wait longer for redirect
-                                time.sleep(3)
-
-                                new_url = driver.current_url
-                                logger.info(f"  URL after click: {new_url}")
-                                urls_visited.append(new_url)
-
-                                # Check if URL changed to Instagram OAuth
-                                if old_url != new_url:
-                                    if 'instagram.com' in new_url:
-                                        logger.info(f"  ✅ SUCCESS! Redirected to Instagram: {new_url}")
-                                        instagram_login_clicked = True
-                                        successful_method = f"{method_name}[{idx}]"
-                                        result['step2_click_technique'] = "JS_CLICK_FORCED"
-                                        break
-                                    elif 'facebook.com/login' in new_url:
-                                        logger.warning(f"  ❌ Wrong page - Facebook login: {new_url}")
-                                        driver.back()
-                                        time.sleep(1)
-                                    else:
-                                        logger.info(f"  ⚠️  URL changed to: {new_url} (might be redirecting...)")
-                                        # Wait a bit more to see if it redirects to Instagram
-                                        time.sleep(2)
-                                        final_url = driver.current_url
-                                        if 'instagram.com' in final_url:
-                                            logger.info(f"  ✅ SUCCESS! Final redirect to Instagram: {final_url}")
-                                            instagram_login_clicked = True
-                                            successful_method = f"{method_name}[{idx}]"
-                                            result['step2_click_technique'] = "JS_CLICK_FORCED"
-                                            urls_visited.append(final_url)
-                                            break
-                                        else:
-                                            logger.warning(f"  ❌ Still not on Instagram: {final_url}")
-                                else:
-                                    logger.info(f"  ❌ No URL change - button click had no effect")
-                            except Exception as e:
-                                logger.warning(f"  ❌ JS click failed: {e}")
-
-                            # CLICK TECHNIQUE 2: Direct href navigation (if it's a link)
-                            if not instagram_login_clicked:
-                                try:
-                                    logger.info("  🖱️  TECHNIQUE 2: Direct href navigation")
-
-                                    # Check if element has href
-                                    href = element.get_attribute('href')
-                                    if href:
-                                        logger.info(f"  Found href: {href}")
-                                        old_url = driver.current_url
-
-                                        # Navigate directly to the href
-                                        driver.get(href)
-                                        time.sleep(3)
-
-                                        new_url = driver.current_url
-                                        logger.info(f"  URL after navigation: {new_url}")
-                                        urls_visited.append(new_url)
-
-                                        if 'instagram.com' in new_url:
-                                            logger.info(f"  ✅ SUCCESS! Redirected to Instagram: {new_url}")
-                                            instagram_login_clicked = True
-                                            successful_method = f"{method_name}[{idx}]"
-                                            result['step2_click_technique'] = "DIRECT_HREF"
-                                            break
-                                    else:
-                                        logger.info(f"  ❌ No href attribute - skipping")
-                                except Exception as e:
-                                    logger.warning(f"  ❌ Direct href navigation failed: {e}")
-
-                            # CLICK TECHNIQUE 3: Selenium native click with WebDriverWait
-                            if not instagram_login_clicked:
-                                try:
-                                    logger.info("  🖱️  TECHNIQUE 3: Selenium native click with wait")
-
-                                    # Wait for element to be clickable
-                                    from selenium.webdriver.support import expected_conditions as EC
-                                    WebDriverWait(driver, 5).until(EC.element_to_be_clickable(element))
-
-                                    driver.execute_script("arguments[0].scrollIntoView({behavior: 'auto', block: 'center'});", element)
-                                    time.sleep(1)
-
-                                    old_url = driver.current_url
-                                    logger.info(f"  URL before click: {old_url}")
-
-                                    element.click()
-                                    time.sleep(3)
-
-                                    new_url = driver.current_url
-                                    logger.info(f"  URL after click: {new_url}")
-                                    urls_visited.append(new_url)
-
-                                    if old_url != new_url:
-                                        if 'instagram.com' in new_url:
-                                            logger.info(f"  ✅ SUCCESS! Redirected to Instagram: {new_url}")
-                                            instagram_login_clicked = True
-                                            successful_method = f"{method_name}[{idx}]"
-                                            result['step2_click_technique'] = "NATIVE_CLICK_WAIT"
-                                            break
-                                        elif 'facebook.com/login' in new_url:
-                                            logger.warning(f"  ❌ Wrong page - Facebook login: {new_url}")
-                                            driver.back()
-                                            time.sleep(1)
-                                        else:
-                                            # Wait for potential redirect
-                                            time.sleep(2)
-                                            final_url = driver.current_url
-                                            if 'instagram.com' in final_url:
-                                                logger.info(f"  ✅ SUCCESS! Final redirect to Instagram: {final_url}")
-                                                instagram_login_clicked = True
-                                                successful_method = f"{method_name}[{idx}]"
-                                                result['step2_click_technique'] = "NATIVE_CLICK_WAIT"
-                                                urls_visited.append(final_url)
-                                                break
-                                    else:
-                                        logger.info(f"  ❌ No URL change")
-                                except Exception as e:
-                                    logger.warning(f"  ❌ Native click with wait failed: {e}")
-
-                        # Store URLs visited
-                        result['step2_urls_visited'] = urls_visited
-
-                        # Log result
-                        if instagram_login_clicked:
-                            logger.info(f"\n{'='*80}")
-                            logger.info(f"🎉 INSTAGRAM LOGIN CLICKED SUCCESSFULLY!")
-                            logger.info(f"🎯 Successful method: {successful_method}")
-                            logger.info(f"{'='*80}")
-
-                            if update_callback:
-                                await update_callback(2, "Instagram login button clicked!")
-
-                            # Take final screenshot after clicking
-                            time.sleep(2)
-                            try:
-                                screenshot_after_click = driver.get_screenshot_as_png()
-                                result['screenshot_step2_after_click'] = screenshot_after_click
-                                logger.info("Screenshot captured AFTER clicking Instagram login")
-                            except Exception as e:
-                                logger.warning(f"Failed to capture after-click screenshot: {e}")
-
-                        else:
-                            logger.warning("=" * 80)
-                            logger.warning("❌ NO INSTAGRAM LOGIN BUTTON FOUND OR SUCCESSFULLY CLICKED")
-                            logger.warning("=" * 80)
-                            logger.warning("Checking if already logged in...")
-
-                            current_url = driver.current_url
-                            if 'business.facebook.com' in current_url and 'login' not in current_url.lower():
-                                logger.info("✅ Already logged into Business Manager")
-                            else:
-                                logger.warning(f"⚠️ Still on login/start page: {current_url}")
-
-                                # Save page source for debugging
-                                try:
-                                    page_text = driver.find_element(By.TAG_NAME, 'body').text
-                                    logger.info(f"Page body text preview: {page_text[:500]}...")
-                                except:
-                                    pass
-
-                    except Exception as e:
-                        logger.error(f"❌ ERROR in Instagram login flow: {e}")
-                        import traceback
-                        logger.error(traceback.format_exc())
-
-                    # Take final screenshot after Step 2
-                    try:
-                        screenshot_step2 = driver.get_screenshot_as_png()
-                        result['screenshot_step2'] = screenshot_step2
-                        logger.info("Final Step 2 screenshot captured")
-                    except Exception as e:
-                        logger.warning(f"Failed to capture Step 2 final screenshot: {e}")
-
-                    # Log all URLs visited
-                    try:
-                        all_urls = driver.execute_script("return window.performance.getEntriesByType('navigation').map(e => e.name);")
-                        logger.info(f"All navigation URLs: {all_urls}")
-                    except:
-                        pass
-
-                    # Verify we're on Business Manager home page
-                    final_step2_url = driver.current_url
-                    logger.info(f"Final Step 2 URL: {final_step2_url}")
-
-                    if 'business.facebook.com' in final_step2_url and 'loginpage' not in final_step2_url:
-                        logger.info("✅ Successfully reached Business Manager home page!")
-                        result['step2_complete'] = True
-                    else:
-                        logger.warning(f"⚠️  Still on login page or unexpected URL: {final_step2_url}")
-                        result['step2_complete'] = False
-
-                    result['step2_method'] = successful_method if instagram_login_clicked else "Not clicked"
-                    logger.info("=" * 80)
-                    logger.info(f"STEP 2: {'COMPLETED' if result['step2_complete'] else 'INCOMPLETE'}")
-                    logger.info("=" * 80)
-
-                    # STEP 3 DISABLED FOR NOW - FOCUSING ON STEP 2
-                    logger.info("=" * 80)
-                    logger.info("STEP 3: DISABLED (Focusing on Step 2)")
-                    logger.info("=" * 80)
-
-                    # Step 3: Navigate to Facebook Ad Center
-                    if False:  # Disabled
-                        try:
-                            logger.info("Starting Step 3 - Facebook Ad Center...")
-                            if update_callback:
-                                await update_callback(3, "Navigating to Ad Center...")
-
-                            # Navigate to Facebook Ad Center with English locale
-                            logger.info("Navigating to Facebook Ad Center...")
-                            driver.get('https://business.facebook.com/latest/ad_center/ads_summary?locale=en_US')
-
-                            # Wait for page to be fully loaded
-                            WebDriverWait(driver, 10).until(
-                                lambda d: d.execute_script('return document.readyState') == 'complete'
-                            )
-
-                            # Force English language again
-                            driver.execute_script("""
-                                Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
-                                Object.defineProperty(navigator, 'language', {get: () => 'en-US'});
-
-                                if (window.localStorage) {
-                                    window.localStorage.setItem('locale', 'en_US');
-                                }
-                            """)
-
-                            if update_callback:
-                                await update_callback(3, "Loading Ad Center data...")
-
-                            # Wait for dynamic content to load (minimal wait)
-                            time.sleep(2)
-
-                            current_url = driver.current_url
-                            logger.info(f"Current URL at Step 3: {current_url}")
-
-                            # Check if we're actually on the Ad Center or still on login page
-                            if 'login' in current_url.lower() or 'get started' in driver.page_source.lower()[:5000]:
-                                logger.warning("Still on login page, attempting to click Instagram login again")
-
-                                # Try to click Instagram login button again
-                                try:
-                                    elements = driver.find_elements(By.XPATH, "//a[contains(., 'Instagram')] | //button[contains(., 'Instagram')] | //div[contains(., 'Instagram')]")
-                                    for element in elements:
-                                        if 'instagram' in element.text.lower():
-                                            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
-                                            time.sleep(0.3)
-                                            driver.execute_script("arguments[0].click();", element)
-                                            logger.info("Clicked Instagram login in Step 3")
-
-                                            # Wait for redirect to business.facebook.com
-                                            try:
-                                                WebDriverWait(driver, 15).until(
-                                                    lambda d: 'business.facebook.com' in d.current_url and 'login' not in d.current_url.lower()
-                                                )
-                                            except TimeoutException:
-                                                logger.warning("Timeout waiting for redirect")
-
-                                            WebDriverWait(driver, 10).until(
-                                                lambda d: d.execute_script('return document.readyState') == 'complete'
-                                            )
-
-                                            # Try navigating to Ad Center again
-                                            driver.get('https://business.facebook.com/latest/ad_center/ads_summary?locale=en_US')
-                                            WebDriverWait(driver, 10).until(
-                                                lambda d: d.execute_script('return document.readyState') == 'complete'
-                                            )
-                                            time.sleep(1.5)
-                                            break
-                                except Exception as e:
-                                    logger.warning(f"Failed to re-click Instagram login: {e}")
-
-                            if update_callback:
-                                await update_callback(3, "Capturing screenshot...")
-
-                            # Wait for page content to be fully rendered
-                            time.sleep(2)
-
-                            # Take screenshot for Step 3
-                            screenshot_step3 = driver.get_screenshot_as_png()
-
-                            result['screenshot_step3'] = screenshot_step3
-                            result['step3_complete'] = True
-
-                            logger.info("Step 3 completed - Screenshot captured")
-
-                        except Exception as e:
-                            logger.warning(f"Step 3 failed: {e}")
-                            result['step3_complete'] = False
-
-                except Exception as e:
-                    logger.warning(f"Step 2 failed: {e}")
-                    result['step2_complete'] = False
-                    result['step3_complete'] = False
+                logger.info("=" * 80)
+                logger.info("STEP 1: COMPLETED - Instagram login successful!")
+                logger.info("=" * 80)
 
             return result
 
@@ -794,18 +268,13 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
             return {
                 'valid': False,
                 'screenshot': screenshot,
-                'screenshot_step2': None,
-                'screenshot_oauth': None,
-                'screenshot_step3': None,
                 'message': "Timeout while checking login status",
                 'url': driver.current_url,
                 'proxy_used': proxy_used,
                 'username': 'N/A',
                 'total_posts': 'N/A',
                 'location': location,
-                'step1_complete': False,
-                'step2_complete': False,
-                'step3_complete': False
+                'step1_complete': False
             }
 
     except WebDriverException as e:
@@ -819,18 +288,13 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
         return {
             'valid': False,
             'screenshot': None,
-            'screenshot_step2': None,
-            'screenshot_oauth': None,
-            'screenshot_step3': None,
             'message': f"Browser error: {str(e)[:100]}",
             'url': None,
             'proxy_used': proxy_used,
             'username': 'N/A',
             'total_posts': 'N/A',
             'location': location,
-            'step1_complete': False,
-            'step2_complete': False,
-            'step3_complete': False
+            'step1_complete': False
         }
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
@@ -843,18 +307,13 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
         return {
             'valid': False,
             'screenshot': None,
-            'screenshot_step2': None,
-            'screenshot_oauth': None,
-            'screenshot_step3': None,
             'message': f"Error: {str(e)[:100]}",
             'url': None,
             'proxy_used': proxy_used,
             'username': 'N/A',
             'total_posts': 'N/A',
             'location': location,
-            'step1_complete': False,
-            'step2_complete': False,
-            'step3_complete': False
+            'step1_complete': False
         }
     finally:
         if driver:

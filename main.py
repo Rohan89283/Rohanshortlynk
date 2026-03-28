@@ -67,9 +67,7 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "━━━━━━━━━━━━━━━━━━━━━━\n"
         "🔍 *INSTAGRAM COOKIE CHECKER*\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "📋 *Step 1:* Instagram Login ⏳\n"
-        "📋 *Step 2:* Meta Business Home ⏸️\n"
-        "📋 *Step 3:* Ad Center Summary ⏸️\n\n"
+        "📋 *Step 1:* Instagram Login ⏳\n\n"
         "⏱️ *Time:* 0s\n"
         "👤 *Username:* N/A\n\n"
         "🔄 Initializing browser...",
@@ -85,9 +83,7 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
                 "🔍 *INSTAGRAM COOKIE CHECKER*\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"📋 *Step 1:* Instagram Login {'✅' if step > 1 else '⏳' if step == 1 else '⏸️'}\n"
-                f"📋 *Step 2:* Meta Business Home {'✅' if step > 2 else '⏳' if step == 2 else '⏸️'}\n"
-                f"📋 *Step 3:* Ad Center Summary {'✅' if step > 3 else '⏳' if step == 3 else '⏸️'}\n\n"
+                f"📋 *Step 1:* Instagram Login {'✅' if step > 1 else '⏳' if step == 1 else '⏸️'}\n\n"
                 f"⏱️ *Time:* {elapsed}s\n\n"
                 f"🔄 {status_text}",
                 parse_mode='Markdown'
@@ -105,19 +101,11 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         step1_status = "✅" if result.get('step1_complete', False) else "❌"
         step1_text = "Completed" if result.get('step1_complete', False) else "Failed"
 
-        step2_status = "✅" if result.get('step2_complete', False) else "❌"
-        step2_text = "Completed" if result.get('step2_complete', False) else "Failed" if result.get('step1_complete', False) else "Pending"
-
-        step3_status = "✅" if result.get('step3_complete', False) else "❌"
-        step3_text = "Completed" if result.get('step3_complete', False) else "Failed" if result.get('step2_complete', False) else "Pending"
-
         final_status = (
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             "🔍 *INSTAGRAM COOKIE CHECKER*\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"📋 *Step 1:* Instagram Login {step1_status} {step1_text}\n"
-            f"📋 *Step 2:* Meta Business Home {step2_status} {step2_text}\n"
-            f"📋 *Step 3:* Ad Center Summary {step3_status} {step3_text}\n\n"
+            f"📋 *Step 1:* Instagram Login {step1_status} {step1_text}\n\n"
             f"⏱️ *Time:* {elapsed}s\n"
             f"👤 *Username:* {username}\n"
             f"📊 *Total Posts:* {total_posts}\n\n"
@@ -130,80 +118,11 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await status_msg.edit_text(final_status, parse_mode='Markdown')
 
-        # Send detailed Step 2 information if available
-        if result.get('step2_method') or result.get('step2_click_technique'):
-            step2_info = "━━━━━━━━━━━━━━━━━━━━━━\n"
-            step2_info += "🔧 *STEP 2 DEBUG INFO*\n"
-            step2_info += "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-
-            if result.get('step2_method'):
-                step2_info += f"✅ *Detection Method:* {result['step2_method']}\n"
-
-            if result.get('step2_click_technique'):
-                step2_info += f"✅ *Click Technique:* {result['step2_click_technique']}\n"
-
-            if result.get('step2_urls_visited'):
-                urls = result['step2_urls_visited']
-                step2_info += f"\n📍 *URLs Visited ({len(urls)}):*\n"
-                for i, url in enumerate(urls[:5], 1):  # Limit to 5 URLs
-                    step2_info += f"{i}. {url[:60]}...\n"
-
-            if result.get('step2_button_html'):
-                button_html = result['step2_button_html']
-                step2_info += f"\n🔍 *Button HTML:*\n`{button_html[:200]}...`\n"
-
-            await update.message.reply_text(step2_info, parse_mode='Markdown')
-
-        # Send all screenshots in order
+        # Send screenshot
         if result.get('screenshot'):
             await update.message.reply_photo(
                 photo=BytesIO(result['screenshot']),
                 caption=f"📸 Step 1 - Instagram Login"
-            )
-
-        if result.get('screenshot_step2_before'):
-            method_used = result.get('step2_method', 'Unknown')
-            technique_used = result.get('step2_click_technique', 'Unknown')
-            await update.message.reply_photo(
-                photo=BytesIO(result['screenshot_step2_before']),
-                caption=f"📸 Step 2 (Before)\n🔧 Method: {method_used}\n🖱️ Click: {technique_used}"
-            )
-
-        if result.get('screenshot_step2_after_click'):
-            await update.message.reply_photo(
-                photo=BytesIO(result['screenshot_step2_after_click']),
-                caption=f"📸 Step 2 (After Click) - Right after clicking Instagram login button"
-            )
-
-        if result.get('screenshot_oauth_before'):
-            await update.message.reply_photo(
-                photo=BytesIO(result['screenshot_oauth_before']),
-                caption=f"📸 OAuth Page (BEFORE) - Instagram OAuth page before clicking 'Log in as'"
-            )
-
-        if result.get('screenshot_oauth_after'):
-            await update.message.reply_photo(
-                photo=BytesIO(result['screenshot_oauth_after']),
-                caption=f"📸 OAuth Page (AFTER) - After clicking 'Log in as' button"
-            )
-
-        # Keep old screenshot_oauth for compatibility
-        if result.get('screenshot_oauth') and not result.get('screenshot_oauth_before'):
-            await update.message.reply_photo(
-                photo=BytesIO(result['screenshot_oauth']),
-                caption=f"📸 OAuth Confirmation Page"
-            )
-
-        if result.get('screenshot_step2'):
-            await update.message.reply_photo(
-                photo=BytesIO(result['screenshot_step2']),
-                caption=f"📸 Step 2 (Final) - Meta Business Home"
-            )
-
-        if result.get('screenshot_step3'):
-            await update.message.reply_photo(
-                photo=BytesIO(result['screenshot_step3']),
-                caption=f"📸 Step 3 - Ad Center Summary"
             )
 
     except Exception as e:
@@ -214,9 +133,7 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             "🔍 *INSTAGRAM COOKIE CHECKER*\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            "📋 *Step 1:* Instagram Login ❌ Error\n"
-            "📋 *Step 2:* Meta Business Home ⏸️ Pending\n"
-            "📋 *Step 3:* Ad Center Summary ⏸️ Pending\n\n"
+            "📋 *Step 1:* Instagram Login ❌ Error\n\n"
             f"⏱️ *Time:* {elapsed}s\n"
             "👤 *Username:* N/A\n"
             "📊 *Total Posts:* N/A\n\n"
