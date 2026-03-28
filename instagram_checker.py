@@ -642,11 +642,11 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         except Exception as e:
                             logger.warning(f"Failed to click 'Get started' button: {e}")
 
-                        # Try to find and click "Continue" button
+                        # Try to find and click first "Continue" button
                         if update_callback:
-                            await update_callback(3, "Looking for 'Continue' button...")
+                            await update_callback(3, "Looking for first 'Continue' button...")
 
-                        logger.info("Searching for 'Continue' button...")
+                        logger.info("Searching for first 'Continue' button...")
                         try:
                             # Try multiple selectors for the "Continue" button with specific classes
                             continue_selectors = [
@@ -667,7 +667,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                     continue_button = WebDriverWait(driver, 10).until(
                                         EC.element_to_be_clickable((By.XPATH, selector))
                                     )
-                                    logger.info(f"Found 'Continue' button using selector: {selector}")
+                                    logger.info(f"Found first 'Continue' button using selector: {selector}")
 
                                     # Scroll to button if needed
                                     try:
@@ -679,10 +679,10 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                     # Click the button
                                     continue_button.click()
                                     continue_clicked = True
-                                    logger.info("✓ Clicked 'Continue' button")
+                                    logger.info("✓ Clicked first 'Continue' button")
 
                                     if update_callback:
-                                        await update_callback(3, "Clicked 'Continue', waiting...")
+                                        await update_callback(3, "Clicked first 'Continue', waiting...")
 
                                     # Wait after click
                                     time.sleep(3)
@@ -692,20 +692,133 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                                     continue
 
                             if not continue_clicked:
-                                logger.info("No 'Continue' button found - may already be past that screen")
+                                logger.info("No first 'Continue' button found - may already be past that screen")
 
                         except Exception as e:
-                            logger.warning(f"Failed to click 'Continue' button: {e}")
+                            logger.warning(f"Failed to click first 'Continue' button: {e}")
 
-                        # Take screenshot at END of Step 3
-                        screenshot_step3 = driver.get_screenshot_as_png()
-                        logger.info("✓ Step 3 screenshot captured (Ad Center page)")
+                        # Try to find and click SECOND "Continue" button (in the popup)
+                        continue_clicked_2 = False
+                        popup_opened = False
+
+                        if update_callback:
+                            await update_callback(3, "Looking for second 'Continue' button...")
+
+                        logger.info("Searching for second 'Continue' button in popup...")
+                        try:
+                            # Wait a bit for the second popup to appear
+                            time.sleep(2)
+
+                            # Try multiple selectors for the second "Continue" button
+                            continue_selectors_2 = [
+                                "//div[contains(@class, 'x1vvvo52') and contains(., 'Continue')]",
+                                "//div[contains(@class, 'x1fvot60') and contains(., 'Continue')]",
+                                "//div[contains(@class, 'xk50ysn') and contains(., 'Continue')]",
+                                "//div[contains(@class, 'xxio538') and contains(., 'Continue')]",
+                                "//div[contains(@class, 'x1heor9g') and contains(., 'Continue')]",
+                                "//span[contains(text(), 'Continue')]",
+                                "//div[contains(text(), 'Continue')]",
+                                "//button[contains(., 'Continue')]",
+                                "//*[contains(text(), 'Continue')]",
+                            ]
+
+                            for selector in continue_selectors_2:
+                                try:
+                                    continue_button_2 = WebDriverWait(driver, 10).until(
+                                        EC.element_to_be_clickable((By.XPATH, selector))
+                                    )
+                                    logger.info(f"Found second 'Continue' button using selector: {selector}")
+
+                                    # Scroll to button if needed
+                                    try:
+                                        driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", continue_button_2)
+                                        time.sleep(1)
+                                    except:
+                                        pass
+
+                                    # Click the button
+                                    continue_button_2.click()
+                                    continue_clicked_2 = True
+                                    logger.info("✓ Clicked second 'Continue' button")
+
+                                    if update_callback:
+                                        await update_callback(3, "Clicked second 'Continue', checking for popup tab...")
+
+                                    # Wait after click to see if popup tab opens
+                                    time.sleep(3)
+                                    break
+                                except Exception as e:
+                                    logger.debug(f"Selector {selector} did not work: {e}")
+                                    continue
+
+                            if not continue_clicked_2:
+                                logger.info("No second 'Continue' button found")
+
+                        except Exception as e:
+                            logger.warning(f"Failed to click second 'Continue' button: {e}")
+
+                        # Check if a popup tab opened after second Continue
+                        screenshot_step3 = None
+                        if continue_clicked_2:
+                            logger.info("Checking for popup tab after second 'Continue' click...")
+                            try:
+                                current_windows = driver.window_handles
+                                logger.info(f"Window handles after second Continue: {len(current_windows)}")
+
+                                if len(current_windows) > 1:
+                                    popup_opened = True
+                                    logger.info("✓ Popup tab opened!")
+
+                                    if update_callback:
+                                        await update_callback(3, "Popup tab detected, taking screenshot...")
+
+                                    # Store main window
+                                    main_window = driver.current_window_handle
+
+                                    # Switch to popup tab to take screenshot
+                                    for window in current_windows:
+                                        if window != main_window:
+                                            driver.switch_to.window(window)
+                                            popup_url = driver.current_url
+                                            logger.info(f"Switched to popup tab. URL: {popup_url}")
+
+                                            # Wait for popup content to load
+                                            time.sleep(2)
+
+                                            # Take screenshot of popup
+                                            screenshot_step3 = driver.get_screenshot_as_png()
+                                            logger.info("✓ Step 3 screenshot captured (popup tab)")
+
+                                            # Close popup tab
+                                            driver.close()
+
+                                            # Switch back to main window
+                                            driver.switch_to.window(main_window)
+                                            logger.info("✓ Closed popup and switched back to main window")
+                                            break
+                                else:
+                                    logger.info("No popup tab opened after second Continue")
+                                    # Take screenshot of current page
+                                    screenshot_step3 = driver.get_screenshot_as_png()
+                                    logger.info("✓ Step 3 screenshot captured (main page)")
+
+                            except Exception as e:
+                                logger.warning(f"Error checking for popup tab: {e}")
+                                # Take screenshot anyway
+                                screenshot_step3 = driver.get_screenshot_as_png()
+                                logger.info("✓ Step 3 screenshot captured (fallback)")
+                        else:
+                            # Take screenshot of current page if second Continue wasn't clicked
+                            screenshot_step3 = driver.get_screenshot_as_png()
+                            logger.info("✓ Step 3 screenshot captured (Ad Center page)")
 
                         logger.info("=" * 80)
                         logger.info("STEP 3: COMPLETED - Ad Center check done!")
                         logger.info(f"On Ad Center: {on_ad_center}")
                         logger.info(f"Get started clicked: {get_started_clicked}")
-                        logger.info(f"Continue clicked: {continue_clicked}")
+                        logger.info(f"First Continue clicked: {continue_clicked}")
+                        logger.info(f"Second Continue clicked: {continue_clicked_2}")
+                        logger.info(f"Popup tab opened: {popup_opened}")
                         logger.info("=" * 80)
 
                         # Update result with step 3 data
@@ -716,8 +829,7 @@ async def check_instagram_cookie(cookie_string: str, user_id: Optional[int] = No
                         result['step3_get_started_clicked'] = get_started_clicked
                         result['step3_continue_clicked'] = continue_clicked
                         result['step3_continue_clicked_2'] = continue_clicked_2
-                        result['step3_popup_after_continue2'] = popup_after_continue2
-                        result['step3_login_clicked_after_continue2'] = login_clicked_after_continue2
+                        result['step3_popup_opened'] = popup_opened
 
                     except Exception as e:
                         logger.error(f"Step 3 failed: {e}", exc_info=True)
