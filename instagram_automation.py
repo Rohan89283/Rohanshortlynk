@@ -313,7 +313,7 @@ class InstagramAutomation:
         return expected_substring in current_url, current_url
 
     async def run_automation(self):
-        """Main automation flow with all steps"""
+        """Main automation flow - stops on first failure"""
         try:
             await self.send_update("🚀 Starting automation process...")
 
@@ -325,29 +325,72 @@ class InstagramAutomation:
             await self.send_update("✓ Chrome driver initialized successfully")
 
             # ==================== STEP 1 ====================
-            await self.send_update("\n📍 STEP 1: Navigating to Facebook Business login page...")
-            self.driver.get("https://business.facebook.com/business/loginpage/?next=https%3A%2F%2Fbusiness.facebook.com%2F%3Fnav_ref%3Dbiz_unified_f3_login_page_to_mbs&login_options%5B0%5D=FB&login_options%5B1%5D=IG&login_options%5B2%5D=SSO&config_ref=biz_login_tool_flavor_mbs")
-            time.sleep(4)
-            self.take_screenshot("step1_fb_business_page")
+            await self.send_update("\n📍 STEP 1: Logging into Instagram with cookies...")
+            await self.send_update("🔐 Navigating to Instagram and setting cookies...")
 
-            contains, url = self.check_url_contains("business.facebook.com")
-            if contains:
-                await self.send_update(f"✓ STEP 1: Page loaded successfully")
-                logger.info(f"URL: {url}")
+            # Go to Instagram and set cookies
+            if not self.set_instagram_cookies():
+                await self.send_update("❌ STEP 1 FAILED: Could not set Instagram cookies")
+                self.take_screenshot("step1_FAILED_cookies")
+                return False, self.screenshots
+
+            await self.send_update("✓ Cookies set, refreshing page...")
+            self.driver.refresh()
+            time.sleep(3)
+
+            # Verify login by checking onetap URL
+            await self.send_update("🔍 Verifying Instagram login...")
+            self.driver.get("https://www.instagram.com/accounts/onetap/")
+            time.sleep(2)
+
+            current_url = self.driver.current_url
+            logger.info(f"Instagram verification URL: {current_url}")
+
+            if "onetap" in current_url or "instagram.com" in current_url:
+                # Check if we're logged in (not redirected to login page)
+                if "/accounts/login" in current_url:
+                    await self.send_update("❌ STEP 1 FAILED: Instagram login failed (redirected to login)")
+                    self.take_screenshot("step1_FAILED_not_logged_in")
+                    return False, self.screenshots
+
+                await self.send_update("✓ STEP 1 SUCCESS: Instagram login verified!")
+                logger.info(f"Login verified at: {current_url}")
             else:
-                await self.send_update(f"⚠️ STEP 1: Unexpected URL: {url}")
+                await self.send_update("❌ STEP 1 FAILED: Unexpected URL after login attempt")
+                self.take_screenshot("step1_FAILED_unexpected_url")
+                return False, self.screenshots
 
             # ==================== STEP 2 ====================
-            await self.send_update("\n📍 STEP 2: Finding and clicking 'Log in with Instagram' button...")
-            await self.send_update("🔍 Searching for Instagram button (NOT Facebook)...")
+            await self.send_update("\n📍 STEP 2: Navigating to Facebook Business and clicking 'Log in with Instagram'...")
+            await self.send_update("🌐 Loading Facebook Business login page...")
+
+            self.driver.get("https://business.facebook.com/business/loginpage/?next=https%3A%2F%2Fbusiness.facebook.com%2F%3Fnav_ref%3Dbiz_unified_f3_login_page_to_mbs&login_options%5B0%5D=FB&login_options%5B1%5D=IG&login_options%5B2%5D=SSO&config_ref=biz_login_tool_flavor_mbs")
+            time.sleep(4)
+
+            contains, url = self.check_url_contains("business.facebook.com")
+            if not contains:
+                await self.send_update(f"❌ STEP 2 FAILED: Not on Facebook Business page")
+                await self.send_update(f"URL: {url}")
+                self.take_screenshot("step2_FAILED_wrong_page")
+                return False, self.screenshots
+
+            logger.info(f"Facebook Business page loaded: {url}")
+            await self.send_update("✓ Facebook Business page loaded")
+            await self.send_update("🔍 Searching for 'Log in with Instagram' button...")
 
             # List all buttons for debugging
             logger.info("=" * 60)
-            logger.info("LISTING ALL BUTTONS ON PAGE:")
+            logger.info("STEP 2 - LISTING ALL BUTTONS:")
             self.list_clickable_elements(keyword="Instagram")
             logger.info("=" * 60)
 
             ig_login_selectors = [
+                {
+                    'type': 'xpath',
+                    'selector': "//span[@class='x1lliihq x193iq5w x6ikm8r x10wlt62 xlyipyv xuxw1ft' and text()='Log in with Instagram']",
+                    'desc': 'XPath - Exact span class and text',
+                    'verify_text': 'Instagram'
+                },
                 {
                     'type': 'xpath',
                     'selector': "//span[text()='Log in with Instagram']/ancestor::div[@role='button']",
@@ -356,32 +399,26 @@ class InstagramAutomation:
                 },
                 {
                     'type': 'xpath',
-                    'selector': "//div[@role='button'][.//span[contains(text(), 'Instagram')]]",
+                    'selector': "//span[@class='x1lliihq x193iq5w x6ikm8r x10wlt62 xlyipyv xuxw1ft']",
+                    'desc': 'XPath - Span with exact classes',
+                    'verify_text': 'Instagram'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//div[@role='button'][.//span[contains(text(), 'Log in with Instagram')]]",
                     'desc': 'XPath - Button containing Instagram span',
                     'verify_text': 'Instagram'
                 },
                 {
                     'type': 'xpath',
                     'selector': "//div[@role='button' and contains(., 'Log in with Instagram') and not(contains(., 'Facebook'))]",
-                    'desc': 'XPath - Button with Instagram text (excluding Facebook)',
+                    'desc': 'XPath - Instagram button (excluding Facebook)',
                     'verify_text': 'Instagram'
                 },
                 {
                     'type': 'xpath',
                     'selector': "//span[contains(@class, 'x1lliihq') and text()='Log in with Instagram']/parent::*",
-                    'desc': 'XPath - Span with Instagram text (parent element)',
-                    'verify_text': 'Instagram'
-                },
-                {
-                    'type': 'xpath',
-                    'selector': "//*[contains(text(), 'Log in with Instagram')]",
-                    'desc': 'XPath - Any element with Instagram login text',
-                    'verify_text': 'Instagram'
-                },
-                {
-                    'type': 'xpath',
-                    'selector': "//button[contains(., 'Instagram')]",
-                    'desc': 'XPath - Button element with Instagram',
+                    'desc': 'XPath - Span parent element',
                     'verify_text': 'Instagram'
                 },
             ]
@@ -390,350 +427,127 @@ class InstagramAutomation:
             await self.send_update(msg)
 
             if not success:
+                await self.send_update("❌ STEP 2 FAILED: Could not find 'Log in with Instagram' button")
                 self.take_screenshot("step2_FAILED_button_not_found")
-                await self.send_update("❌ STEP 2 FAILED: Could not find Instagram login button")
                 return False, self.screenshots
 
-            time.sleep(4)
-            self.take_screenshot("step2_clicked_instagram_login")
+            await self.send_update("✓ STEP 2 SUCCESS: Clicked 'Log in with Instagram'")
+            time.sleep(3)
 
             # ==================== STEP 3 ====================
-            await self.send_update("\n📍 STEP 3: Handling Instagram login popup...")
+            await self.send_update("\n📍 STEP 3: Handling Instagram OAuth popup...")
+            time.sleep(3)
 
-            # Check if new window opened
+            # Check if new window/tab opened
             if len(self.driver.window_handles) > 1:
                 self.driver.switch_to.window(self.driver.window_handles[-1])
-                await self.send_update("✓ Switched to Instagram login window")
+                await self.send_update("✓ Switched to OAuth popup window")
                 time.sleep(2)
 
             current_url = self.driver.current_url
-            logger.info(f"Current URL: {current_url}")
+            logger.info(f"OAuth popup URL: {current_url}")
+            await self.send_update(f"Current URL: {current_url[:80]}...")
 
-            if "instagram.com" not in current_url:
-                await self.send_update(f"⚠️ Not on Instagram page. URL: {current_url[:100]}")
-                self.take_screenshot("step3_not_instagram")
+            # Verify we're on Instagram OAuth page
+            if "instagram.com/oauth" not in current_url and "instagram.com" not in current_url:
+                await self.send_update("❌ STEP 3 FAILED: Not on Instagram OAuth page")
+                await self.send_update(f"URL: {current_url[:100]}")
+                self.take_screenshot("step3_FAILED_not_oauth")
                 return False, self.screenshots
 
-            await self.send_update("✓ Instagram login page opened")
-            self.take_screenshot("step3_instagram_login_page")
+            await self.send_update("✓ Instagram OAuth page detected")
+            await self.send_update("🔍 Looking for 'Log in as [username]' button...")
 
-            # Set cookies
-            await self.send_update("🔐 Setting Instagram cookies...")
-            if not self.set_instagram_cookies():
-                await self.send_update("❌ Failed to set cookies")
-                self.take_screenshot("step3_FAILED_cookies")
-                return False, self.screenshots
+            # List all buttons for debugging
+            logger.info("=" * 60)
+            logger.info("STEP 3 - LISTING ALL BUTTONS:")
+            self.list_clickable_elements(keyword="Log in")
+            logger.info("=" * 60)
 
-            await self.send_update("✓ Cookies set successfully, refreshing page...")
-            self.driver.refresh()
-            time.sleep(4)
-            self.take_screenshot("step3_after_cookies_refresh")
-
-            # Check for "Not Now" button (notifications popup)
-            await self.send_update("🔍 Checking for notification popup...")
-            not_now_selectors = [
-                {'type': 'xpath', 'selector': "//button[contains(text(), 'Not Now')]", 'desc': 'Not Now button'},
-                {'type': 'xpath', 'selector': "//button[contains(text(), 'Not now')]", 'desc': 'Not now button (lowercase)'},
-                {'type': 'css', 'selector': "button._a9--._ap36._a9_1", 'desc': 'Not now button class'},
-            ]
-
-            success, msg = self.try_find_and_click(not_now_selectors, "Dismiss Notifications", timeout=5)
-            if success:
-                await self.send_update("✓ Dismissed notification popup (login successful)")
-                time.sleep(2)
-            else:
-                await self.send_update("ℹ️ No notification popup found")
-
-            # Look for "Log in as" button
-            await self.send_update("🔍 Looking for 'Log in as' button...")
+            # Look for "Log in as" button with flexible username
             login_as_selectors = [
                 {
                     'type': 'xpath',
-                    'selector': "//div[@role='button' and contains(text(), 'Log in as')]",
-                    'desc': 'Log in as button with role'
+                    'selector': "//div[@class='x1i10hfl xjqpnuy xc5r6h4 xqeqjp1 x1phubyo x972fbf x10w94by x1qhh985 x14e42zd xdl72j9 x2lah0s x3ct3a4 xdj266r x14z9mp xat24cr x1lziwak x2lwn1j xeuugli xexx8yu x18d9i69 x1hl2dhg xggy1nq x1ja2u2z x1t137rt x1q0g3np x1lku1pv x1a2a7pz x6s0dn4 xjyslct x1ejq31n x18oe1m7 x1sy0etr xstzfhl x9f619 x9bdzbf x1ypdohk x1f6kntn xwhw2v2 xl56j7k x17ydfre x1n2onr6 x2b8uid xlyipyv x87ps6o x14atkfc x5c86q x18br7mf x1i0vuye x6nl9eh x1a5l9x9 x7vuprf x1mg3h75 xn3w4p2 x106a9eq x1xnnf8n x18cabeq x158me93 xk4oym4 x1uugd1q x3nfvp2' and @role='button' and contains(text(), 'Log in as')]",
+                    'desc': 'XPath - Exact div class with Log in as text',
+                    'verify_text': 'Log in as'
                 },
                 {
                     'type': 'xpath',
-                    'selector': "//div[contains(@class, 'x1i10hfl') and contains(text(), 'Log in as')]",
-                    'desc': 'Log in as with class'
+                    'selector': "//div[@role='button' and contains(text(), 'Log in as')]",
+                    'desc': 'XPath - Role button with Log in as text',
+                    'verify_text': 'Log in as'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//div[contains(@class, 'x1i10hfl') and @role='button' and contains(text(), 'Log in as')]",
+                    'desc': 'XPath - Class x1i10hfl with role button',
+                    'verify_text': 'Log in as'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//*[@role='button' and starts-with(text(), 'Log in as')]",
+                    'desc': 'XPath - Any role button starting with Log in as',
+                    'verify_text': 'Log in as'
                 },
                 {
                     'type': 'css',
-                    'selector': "div.x1i10hfl.xjqpnuy.xc5r6h4",
-                    'desc': 'Button with specific classes'
+                    'selector': "div.x1i10hfl.xjqpnuy.xc5r6h4[role='button']",
+                    'desc': 'CSS - Div with role button and classes',
+                    'verify_text': 'Log in as'
                 },
             ]
 
-            success, msg = self.try_find_and_click(login_as_selectors, "STEP 3 - Log in as", timeout=8)
-            if success:
-                await self.send_update(msg)
-                await self.send_update("✓ STEP 3: Login successful!")
-                time.sleep(3)
-                self.take_screenshot("step3_logged_in_success")
-            else:
-                await self.send_update("ℹ️ No 'Log in as' button found, checking if already logged in...")
-                self.take_screenshot("step3_no_login_as_button")
+            success, msg = self.try_find_and_click(login_as_selectors, "STEP 3 - Log in as", timeout=15, verify_text='Log in as')
+
+            if not success:
+                await self.send_update("❌ STEP 3 FAILED: Could not find 'Log in as' button")
+                self.take_screenshot("step3_FAILED_no_login_as_button")
+                return False, self.screenshots
+
+            await self.send_update("✓ STEP 3 SUCCESS: Clicked 'Log in as [username]'")
+            time.sleep(4)
 
             # ==================== STEP 4 ====================
             await self.send_update("\n📍 STEP 4: Verifying redirect to Facebook Business home...")
 
             # Switch back to main window if needed
             if len(self.driver.window_handles) > 1:
+                await self.send_update("🔄 Switching back to main window...")
                 self.driver.switch_to.window(self.driver.window_handles[0])
-                await self.send_update("✓ Switched back to main window")
-
-            time.sleep(5)
-            current_url = self.driver.current_url
-            logger.info(f"Home page URL: {current_url}")
-
-            if "business.facebook.com/latest/home" in current_url or "business_id=" in current_url:
-                await self.send_update(f"✓ STEP 4: Successfully on Business home page!")
-                await self.send_update(f"URL confirmed: {current_url[:80]}...")
-                self.take_screenshot("step4_business_home_SUCCESS")
-            else:
-                await self.send_update(f"⚠️ STEP 4: Unexpected URL")
-                await self.send_update(f"Current URL: {current_url[:100]}...")
-                self.take_screenshot("step4_unexpected_url")
-
-            # ==================== STEP 5 ====================
-            await self.send_update("\n📍 STEP 5: Finding and clicking 'Create ad' button...")
-
-            # List buttons for debugging
-            logger.info("=" * 60)
-            logger.info("STEP 5 - LISTING BUTTONS:")
-            self.list_clickable_elements(keyword="ad")
-            logger.info("=" * 60)
-
-            create_ad_selectors = [
-                {
-                    'type': 'xpath',
-                    'selector': "//div[contains(text(), 'Create ad')]",
-                    'desc': 'XPath - div with Create ad text'
-                },
-                {
-                    'type': 'xpath',
-                    'selector': "//button[contains(., 'Create ad')]",
-                    'desc': 'XPath - button with Create ad'
-                },
-                {
-                    'type': 'css',
-                    'selector': "div.x1vvvo52.x1fvot60.xk50ysn.xxio538.x1heor9g.xuxw1ft.x6ikm8r.x10wlt62.xlyipyv.x1h4wwuj.xeuugli",
-                    'desc': 'CSS - Create ad button classes'
-                },
-            ]
-
-            success, msg = self.try_find_and_click(create_ad_selectors, "STEP 5 - Create Ad", timeout=15)
-            await self.send_update(msg)
-
-            if not success:
-                self.take_screenshot("step5_FAILED_create_ad_not_found")
-                await self.send_update("❌ STEP 5 FAILED: Could not find Create ad button")
-                return False, self.screenshots
-
-            time.sleep(4)
-            self.take_screenshot("step5_clicked_create_ad")
-            await self.send_update("✓ STEP 5: Create ad button clicked successfully")
-
-            # ==================== STEP 6 ====================
-            await self.send_update("\n📍 STEP 6: Navigating to boosted item picker...")
-            time.sleep(3)
-
-            current_url = self.driver.current_url
-            if "boosted_item_picker" in current_url:
-                await self.send_update("✓ On boosted item picker page")
-                logger.info(f"Picker URL: {current_url}")
-
-            self.take_screenshot("step6_boosted_item_picker_page")
-
-            await self.send_update("📍 STEP 6a: Clicking FIRST Continue button...")
-
-            # List buttons for debugging
-            logger.info("=" * 60)
-            logger.info("STEP 6a - LISTING BUTTONS:")
-            self.list_clickable_elements(keyword="Continue")
-            logger.info("=" * 60)
-
-            continue_selectors = [
-                {
-                    'type': 'xpath',
-                    'selector': "//div[contains(text(), 'Continue') and contains(@class, 'x1vvvo52')]",
-                    'desc': 'XPath - Continue button with class'
-                },
-                {
-                    'type': 'xpath',
-                    'selector': "//button[contains(., 'Continue')]",
-                    'desc': 'XPath - Continue button element'
-                },
-                {
-                    'type': 'css',
-                    'selector': "div.x1vvvo52.x1fvot60.xk50ysn.xxio538.x1heor9g.xuxw1ft.x6ikm8r.x10wlt62.xlyipyv.x1h4wwuj.xeuugli",
-                    'desc': 'CSS - Continue button classes'
-                },
-            ]
-
-            success, msg = self.try_find_and_click(continue_selectors, "STEP 6a - First Continue", timeout=15)
-            await self.send_update(msg)
-
-            if not success:
-                self.take_screenshot("step6a_FAILED_first_continue")
-                await self.send_update("❌ STEP 6a FAILED: Could not find first Continue button")
-                return False, self.screenshots
-
-            time.sleep(3)
-            self.take_screenshot("step6a_first_continue_clicked")
-
-            # Click SECOND Continue in popup
-            await self.send_update("📍 STEP 6b: Clicking SECOND Continue button in popup...")
-
-            continue_popup_selectors = [
-                {
-                    'type': 'xpath',
-                    'selector': "//div[contains(@class, 'x6s0dn4')]//div[contains(text(), 'Continue') and contains(@class, 'x1vvvo52')]",
-                    'desc': 'XPath - Continue in popup container'
-                },
-                {
-                    'type': 'css',
-                    'selector': "div.x6s0dn4 div.x1vvvo52",
-                    'desc': 'CSS - Popup Continue button'
-                },
-                {
-                    'type': 'xpath',
-                    'selector': "//div[contains(@class, 'x6s0dn4')]//div[text()='Continue']",
-                    'desc': 'XPath - Exact Continue text in popup'
-                },
-            ]
-
-            time.sleep(2)
-            success, msg = self.try_find_and_click(continue_popup_selectors, "STEP 6b - Second Continue", timeout=15)
-            await self.send_update(msg)
-
-            if not success:
-                self.take_screenshot("step6b_FAILED_second_continue")
-                await self.send_update("❌ STEP 6b FAILED: Could not find second Continue button")
-                return False, self.screenshots
-
-            time.sleep(4)
-            self.take_screenshot("step6b_second_continue_clicked")
-            await self.send_update("✓ STEP 6: Both Continue buttons clicked successfully")
-
-            # ==================== STEP 7 ====================
-            await self.send_update("\n📍 STEP 7: Handling Facebook OIDC authorization popup...")
-
-            # Check for new window
-            if len(self.driver.window_handles) > 1:
-                self.driver.switch_to.window(self.driver.window_handles[-1])
-                await self.send_update("✓ Switched to authorization window")
                 time.sleep(3)
 
-            current_url = self.driver.current_url
-            logger.info(f"OIDC URL: {current_url}")
-
-            if "oidc" not in current_url:
-                await self.send_update(f"⚠️ Not on OIDC page. URL: {current_url[:100]}")
-                self.take_screenshot("step7_not_oidc_page")
-            else:
-                await self.send_update("✓ OIDC authorization page opened")
-                self.take_screenshot("step7_oidc_authorization_page")
-
-                # Click "Continue as" button
-                await self.send_update("🔍 Looking for 'Continue as' button...")
-                continue_as_selectors = [
-                    {
-                        'type': 'xpath',
-                        'selector': "//button[@name='__CONFIRM__']",
-                        'desc': 'XPath - Confirm button by name'
-                    },
-                    {
-                        'type': 'xpath',
-                        'selector': "//button[contains(text(), 'Continue as')]",
-                        'desc': 'XPath - Continue as text'
-                    },
-                    {
-                        'type': 'css',
-                        'selector': "button._42ft._4jy0.layerConfirm",
-                        'desc': 'CSS - Continue button classes'
-                    },
-                    {
-                        'type': 'css',
-                        'selector': "button[name='__CONFIRM__']",
-                        'desc': 'CSS - Confirm button'
-                    },
-                ]
-
-                success, msg = self.try_find_and_click(continue_as_selectors, "STEP 7 - Continue As", timeout=15)
-                await self.send_update(msg)
-
-                if not success:
-                    self.take_screenshot("step7_FAILED_continue_as")
-                    await self.send_update("❌ STEP 7 FAILED: Could not find Continue As button")
-                    return False, self.screenshots
-
-                time.sleep(4)
-                self.take_screenshot("step7_authorization_clicked")
-                await self.send_update("✓ STEP 7: Authorization completed")
-
-                # Check redirect URL
-                time.sleep(2)
-                current_url = self.driver.current_url
-                if "code=" in current_url and "state=" in current_url:
-                    await self.send_update("✓ Authorization callback received")
-                    logger.info(f"Callback URL: {current_url[:150]}...")
-
-            # Return to main window
-            if len(self.driver.window_handles) > 1:
-                self.driver.switch_to.window(self.driver.window_handles[0])
-                await self.send_update("✓ Returned to main window")
-
             time.sleep(5)
-
-            # ==================== STEP 8 ====================
-            await self.send_update("\n📍 STEP 8: Repeating Continue button clicks...")
-
-            self.take_screenshot("step8_before_continue_repeat")
-
-            # First Continue again
-            await self.send_update("📍 STEP 8a: Clicking first Continue (repeat)...")
-            success, msg = self.try_find_and_click(continue_selectors, "STEP 8a - First Continue (repeat)", timeout=15)
-            await self.send_update(msg)
-
-            if success:
-                time.sleep(3)
-                self.take_screenshot("step8a_first_continue_repeat")
-
-                # Second Continue again
-                await self.send_update("📍 STEP 8b: Clicking second Continue (repeat)...")
-                success2, msg2 = self.try_find_and_click(continue_popup_selectors, "STEP 8b - Second Continue (repeat)", timeout=15)
-                await self.send_update(msg2)
-
-                if success2:
-                    await self.send_update("✓ STEP 8: Both Continue buttons clicked (repeat)")
-                    time.sleep(4)
-                    self.take_screenshot("step8b_second_continue_repeat")
-            else:
-                await self.send_update("ℹ️ STEP 8: Continue buttons may not be needed (already processed)")
-
-            time.sleep(5)
-            self.take_screenshot("step8_after_final_clicks")
-
-            # ==================== FINAL ====================
-            await self.send_update("\n📍 Checking final status...")
-
             current_url = self.driver.current_url
             logger.info(f"Final URL: {current_url}")
-            await self.send_update(f"Final URL: {current_url[:100]}...")
+            await self.send_update(f"📊 Current URL: {current_url[:80]}...")
 
-            self.take_screenshot("final_result_page")
+            # Check if we're on Business home page
+            if "business.facebook.com/latest/home" in current_url or "business_id=" in current_url or "asset_id=" in current_url:
+                await self.send_update(f"✅ STEP 4 SUCCESS: Redirected to Facebook Business home!")
+                await self.send_update(f"✅ URL confirmed: {current_url}")
+                logger.info(f"✅ SUCCESS! Business ID detected in URL")
+            else:
+                await self.send_update(f"❌ STEP 4 FAILED: Not on Business home page")
+                await self.send_update(f"Expected: business.facebook.com/latest/home?business_id=...")
+                await self.send_update(f"Got: {current_url[:100]}")
+                self.take_screenshot("step4_FAILED_wrong_url")
+                return False, self.screenshots
 
-            # Check for success indicators
-            time.sleep(3)
-            page_text = self.driver.find_element(By.TAG_NAME, "body").text
+            # ==================== FINAL ====================
+            await self.send_update("\n✅ ALL STEPS COMPLETED SUCCESSFULLY!")
+            await self.send_update("✅ Instagram account connected to Facebook Business Manager")
+            await self.send_update(f"✅ Business URL: {current_url}")
+            await self.send_update(f"\n📊 Total screenshots captured: {len(self.screenshots)}")
 
-            if any(keyword in page_text.lower() for keyword in ['success', 'complete', 'connected', 'done']):
-                await self.send_update("✅ Success indicators found on page")
+            if len(self.screenshots) > 0:
+                await self.send_update("📸 Sending screenshots for review...")
 
-            await self.send_update("\n✅ AUTOMATION PROCESS COMPLETED!")
-            await self.send_update(f"📊 Total screenshots captured: {len(self.screenshots)}")
-            await self.send_update("📸 Sending all screenshots for review...")
+            logger.info("=" * 60)
+            logger.info("AUTOMATION COMPLETED SUCCESSFULLY!")
+            logger.info(f"Final URL: {current_url}")
+            logger.info(f"Screenshots: {len(self.screenshots)}")
+            logger.info("=" * 60)
 
             return True, self.screenshots
 

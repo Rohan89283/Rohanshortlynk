@@ -26,16 +26,40 @@ A Telegram bot that automates the process of connecting Instagram accounts to Fa
 
 ## How It Works
 
-The bot performs the following steps automatically:
+The bot automates **4 simple steps** with stop-on-failure logic:
 
-1. Navigates to Facebook Business login page
-2. Clicks "Log in with Instagram" button
-3. Uses your Instagram cookies to authenticate
-4. Navigates through Business Manager setup
-5. Clicks "Create ad" button
-6. Processes boosted item picker flow
-7. Handles Facebook OIDC authorization
-8. Completes the connection process
+### Step 1: Instagram Login Verification
+- Goes to Instagram with your cookies
+- Verifies login at `/accounts/onetap/` URL
+- Confirms you're logged in (not redirected to login page)
+- **Stops if**: Cookies invalid or login fails
+
+### Step 2: Click "Log in with Instagram"
+- Navigates to Facebook Business login page
+- Lists all buttons for debugging
+- Finds "Log in with Instagram" button (NOT Facebook)
+- Uses 6 selector strategies + text verification
+- **Stops if**: Button not found
+
+### Step 3: OAuth Popup Authorization
+- Detects Instagram OAuth popup window
+- Lists all "Log in" buttons
+- Clicks "Log in as [username]" button
+- Verifies button text before clicking
+- **Stops if**: Popup doesn't open or button not found
+
+### Step 4: Verify Business Home
+- Switches back to main window
+- Checks URL contains `business_id=` parameter
+- Confirms redirect to Business Manager home
+- **Stops if**: Wrong URL or redirect failed
+
+**Key Features:**
+- Stop immediately on any failure
+- Screenshots only taken on failures
+- Button text verified before clicking
+- 4-8 selector attempts per button
+- Logs which method worked/failed
 
 ## Prerequisites
 

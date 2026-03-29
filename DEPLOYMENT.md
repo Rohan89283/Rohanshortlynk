@@ -6,10 +6,14 @@ This Telegram bot automates the process of connecting Instagram accounts to Face
 
 ## Features
 
-- Automated Instagram to Facebook Business Manager linking
-- Live progress updates via Telegram messages
-- Screenshot capture at every step
-- Detailed logging for debugging
+- **4-step automation process** with stop-on-failure logic
+- Instagram login verification before starting
+- Smart button detection with text verification
+- OAuth popup handling with username detection
+- Business Manager redirect confirmation
+- Screenshots only on failures (not every step)
+- Live progress updates via Telegram
+- Detailed logging with method tracking
 - Database session tracking
 - Anti-detection browser automation
 - Runs 24/7 on Railway
