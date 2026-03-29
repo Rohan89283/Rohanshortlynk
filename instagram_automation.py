@@ -652,10 +652,31 @@ class InstagramAutomation:
             await self.send_update("\n📍 STEP 4: Waiting for redirect to Facebook Business home...")
 
             # Wait for the main page to redirect (popup closed, main page should refresh)
-            time.sleep(6)
-            current_url = self.driver.current_url
-            logger.info(f"Final URL: {current_url}")
-            await self.send_update(f"📊 Current URL: {current_url[:80]}...")
+            # Use smaller sleep intervals to keep session alive
+            for i in range(3):
+                time.sleep(2)
+                try:
+                    # Keep session alive by checking URL
+                    _ = self.driver.current_url
+                except Exception as e:
+                    logger.warning(f"Session check {i+1}/3 failed: {e}")
+
+            try:
+                current_url = self.driver.current_url
+                logger.info(f"Final URL: {current_url}")
+                await self.send_update(f"📊 Current URL: {current_url[:80]}...")
+            except Exception as e:
+                logger.error(f"Failed to get current URL: {e}")
+                await self.send_update("❌ Browser session lost, attempting to recover...")
+                # Try to refresh and continue
+                try:
+                    self.driver.refresh()
+                    time.sleep(3)
+                    current_url = self.driver.current_url
+                except Exception as refresh_error:
+                    logger.error(f"Could not recover session: {refresh_error}")
+                    await self.send_update(f"❌ STEP 4 FAILED: Browser session disconnected")
+                    return False, self.screenshots
 
             # Check if we're on Business home page
             if "business.facebook.com/latest/home" in current_url or "business_id=" in current_url or "asset_id=" in current_url:
@@ -682,7 +703,15 @@ class InstagramAutomation:
 
             try:
                 self.driver.get(ads_center_url)
-                time.sleep(8)
+
+                # Use smaller sleep intervals to keep session alive
+                for i in range(4):
+                    time.sleep(2)
+                    try:
+                        # Keep session alive by checking title
+                        _ = self.driver.title
+                    except Exception as e:
+                        logger.warning(f"Session check {i+1}/4 during page load: {e}")
 
                 self.take_screenshot("step5_navigated_to_ads_center")
 
@@ -693,7 +722,10 @@ class InstagramAutomation:
             except Exception as nav_error:
                 logger.error(f"❌ Navigation to Ads Center failed: {nav_error}")
                 await self.send_update(f"❌ Failed to load Ads Center page")
-                self.take_screenshot("step5_FAILED_navigation_crash")
+                try:
+                    self.take_screenshot("step5_FAILED_navigation_crash")
+                except:
+                    logger.error("Could not take screenshot - session lost")
                 return False, self.screenshots
 
             # Wait for page to load
