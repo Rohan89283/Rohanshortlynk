@@ -49,6 +49,7 @@ class InstagramAutomation:
             logger.info(f"Detected Chrome version: {chrome_version}")
 
             options = uc.ChromeOptions()
+            # Core stability flags for containerized environments
             options.add_argument('--no-sandbox')
             options.add_argument('--disable-dev-shm-usage')
             options.add_argument('--disable-blink-features=AutomationControlled')
@@ -57,23 +58,25 @@ class InstagramAutomation:
             options.add_argument('--disable-software-rasterizer')
             options.add_argument('--disable-extensions')
             options.add_argument('--disable-setuid-sandbox')
-            options.add_argument('--no-first-run')
-            options.add_argument('--no-zygote')
-            options.add_argument('--single-process')
+
+            # Window and display settings
             options.add_argument('--window-size=1920,1080')
+            options.add_argument('--hide-scrollbars')
+            options.add_argument('--mute-audio')
+
+            # Memory and performance optimizations
             options.add_argument('--disable-background-networking')
             options.add_argument('--disable-background-timer-throttling')
             options.add_argument('--disable-backgrounding-occluded-windows')
             options.add_argument('--disable-breakpad')
             options.add_argument('--disable-component-extensions-with-background-pages')
-            options.add_argument('--disable-features=TranslateUI,BlinkGenPropertyTrees,VizDisplayCompositor')
+            options.add_argument('--disable-features=TranslateUI')
             options.add_argument('--disable-ipc-flooding-protection')
             options.add_argument('--disable-renderer-backgrounding')
-            options.add_argument('--enable-features=NetworkService,NetworkServiceInProcess')
-            options.add_argument('--force-color-profile=srgb')
-            options.add_argument('--hide-scrollbars')
             options.add_argument('--metrics-recording-only')
-            options.add_argument('--mute-audio')
+
+            # Shared memory increase to prevent crashes
+            options.add_argument('--shm-size=2gb')
 
             # Force English language at browser level
             options.add_argument('--lang=en-US')
@@ -679,31 +682,41 @@ class InstagramAutomation:
             # ==================== STEP 4 ====================
             await self.send_update("\n📍 STEP 4: Waiting for redirect to Facebook Business home...")
 
-            # Wait for the main page to redirect (popup closed, main page should refresh)
-            # Use smaller sleep intervals to keep session alive
-            for i in range(3):
-                time.sleep(2)
-                try:
-                    # Keep session alive by checking URL
-                    _ = self.driver.current_url
-                except Exception as e:
-                    logger.warning(f"Session check {i+1}/3 failed: {e}")
-
             try:
+                # Wait for the main page to redirect (popup closed, main page should refresh)
+                # Use smaller sleep intervals to keep session alive
+                for i in range(3):
+                    time.sleep(2)
+                    try:
+                        # Keep session alive by checking URL
+                        current_check = self.driver.current_url
+                        logger.info(f"Session alive check {i+1}/3: {current_check[:80]}")
+                    except Exception as e:
+                        logger.warning(f"Session check {i+1}/3 failed: {e}")
+                        # If session check fails, break early
+                        if i >= 1:
+                            raise Exception(f"Multiple session checks failed: {e}")
+
                 current_url = self.driver.current_url
                 logger.info(f"Final URL: {current_url}")
                 await self.send_update(f"📊 Current URL: {current_url[:80]}...")
+
             except Exception as e:
-                logger.error(f"Failed to get current URL: {e}")
-                await self.send_update("❌ Browser session lost, attempting to recover...")
-                # Try to refresh and continue
+                logger.error(f"Step 4 error (browser may have crashed): {e}")
+                await self.send_update(f"⚠️ Browser issue detected: {str(e)[:100]}")
+                await self.send_update("🔄 Attempting to recover browser session...")
+
+                # Try to recover
                 try:
-                    self.driver.refresh()
-                    time.sleep(3)
-                    current_url = self.driver.current_url
-                except Exception as refresh_error:
-                    logger.error(f"Could not recover session: {refresh_error}")
-                    await self.send_update(f"❌ STEP 4 FAILED: Browser session disconnected")
+                    # Check if driver is still responsive
+                    test_url = self.driver.current_url
+                    logger.info(f"✓ Browser recovered, URL: {test_url}")
+                    current_url = test_url
+                except:
+                    # Driver completely dead, try to restart
+                    logger.error("❌ Browser completely unresponsive")
+                    await self.send_update("❌ STEP 4 FAILED: Browser crashed and cannot be recovered")
+                    self.take_screenshot("step4_FAILED_browser_crash")
                     return False, self.screenshots
 
             # Check if we're on Business home page
