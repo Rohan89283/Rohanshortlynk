@@ -385,6 +385,15 @@ class InstagramAutomation:
                     logger.info(f"   ✓ Attempt number: {idx}/{len(selectors)}")
                     logger.info(f"   ✓ Step: {step_name}")
                     logger.info("=" * 80 + "\n")
+
+                    # Wait a bit and verify session is still alive
+                    time.sleep(0.5)
+                    try:
+                        current_url = self.driver.current_url
+                        logger.info(f"✓ Session still alive after click, URL: {current_url[:100]}")
+                    except Exception as session_err:
+                        logger.error(f"⚠️ Session may be lost after click: {session_err}")
+
                     success_msg = f"✓ {step_name}: SUCCESS | Selector: {selector_type} | Click: {click_method} | Attempt: {idx}/{len(selectors)}"
                     return True, success_msg
                 else:
@@ -533,14 +542,37 @@ class InstagramAutomation:
                 return False, self.screenshots
 
             await self.send_update("✓ STEP 2 SUCCESS: Clicked 'Log in with Instagram'")
-            time.sleep(3)
+
+            # Wait in smaller increments to keep session alive
+            for i in range(3):
+                time.sleep(1)
+                try:
+                    # Keep session alive by checking URL
+                    _ = self.driver.current_url
+                except Exception as e:
+                    logger.warning(f"Session check {i+1}/3 after Step 2: {e}")
 
             # ==================== STEP 3 ====================
             await self.send_update("\n📍 STEP 3: Handling Instagram OAuth popup...")
-            time.sleep(3)
+
+            # Additional wait before checking windows
+            for i in range(3):
+                time.sleep(1)
+                try:
+                    # Keep session alive by checking title
+                    _ = self.driver.title
+                except Exception as e:
+                    logger.warning(f"Session check {i+1}/3 in Step 3: {e}")
 
             # Check if new window/tab opened
-            popup_opened = len(self.driver.window_handles) > 1
+            try:
+                popup_opened = len(self.driver.window_handles) > 1
+                logger.info(f"Window handles count: {len(self.driver.window_handles)}")
+            except Exception as e:
+                logger.error(f"Failed to check window handles: {e}")
+                await self.send_update(f"❌ STEP 3 FAILED: Browser session lost - {str(e)}")
+                self.take_screenshot("step3_FAILED_session_lost")
+                return False, self.screenshots
 
             if popup_opened:
                 self.driver.switch_to.window(self.driver.window_handles[-1])
