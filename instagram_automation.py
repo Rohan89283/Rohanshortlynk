@@ -506,18 +506,20 @@ class InstagramAutomation:
                 return False, self.screenshots
 
             await self.send_update("✓ STEP 3 SUCCESS: Clicked 'Log in as [username]'")
-            time.sleep(4)
+
+            # Immediately switch back to main window (popup will close automatically)
+            await self.send_update("🔄 Switching back to main window...")
+            time.sleep(2)  # Brief wait for popup to start closing
+
+            # The popup closes automatically, switch to the first (main) window
+            self.driver.switch_to.window(self.driver.window_handles[0])
+            logger.info("✓ Switched back to main window after clicking 'Log in as'")
 
             # ==================== STEP 4 ====================
-            await self.send_update("\n📍 STEP 4: Verifying redirect to Facebook Business home...")
+            await self.send_update("\n📍 STEP 4: Waiting for redirect to Facebook Business home...")
 
-            # Switch back to main window if needed
-            if len(self.driver.window_handles) > 1:
-                await self.send_update("🔄 Switching back to main window...")
-                self.driver.switch_to.window(self.driver.window_handles[0])
-                time.sleep(3)
-
-            time.sleep(5)
+            # Wait for the main page to redirect (popup closed, main page should refresh)
+            time.sleep(6)
             current_url = self.driver.current_url
             logger.info(f"Final URL: {current_url}")
             await self.send_update(f"📊 Current URL: {current_url[:80]}...")
