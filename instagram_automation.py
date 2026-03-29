@@ -675,37 +675,7 @@ class InstagramAutomation:
             await self.send_update("\n📍 STEP 5: Navigating to Facebook Ads Center...")
             time.sleep(2)
 
-            # Force Facebook to English by setting multiple language cookies
-            logger.info("🌍 Forcing Facebook Business to English language...")
-            await self.send_update("🌍 Setting Facebook to English...")
-
-            try:
-                # First visit Facebook to set the domain for cookies
-                self.driver.get("https://business.facebook.com")
-                time.sleep(2)
-
-                # Set multiple locale cookies to English (United States)
-                language_cookies = [
-                    {'name': 'locale', 'value': 'en_US', 'domain': '.facebook.com', 'path': '/'},
-                    {'name': 'locale', 'value': 'en_US', 'domain': '.business.facebook.com', 'path': '/'},
-                    {'name': 'i18n_language', 'value': 'en_US', 'domain': '.facebook.com', 'path': '/'},
-                    {'name': 'lang', 'value': 'en', 'domain': '.facebook.com', 'path': '/'},
-                ]
-
-                for cookie in language_cookies:
-                    try:
-                        self.driver.add_cookie(cookie)
-                        logger.info(f"✓ Set {cookie['name']} cookie")
-                    except Exception as cookie_error:
-                        logger.warning(f"Could not set {cookie['name']} cookie: {cookie_error}")
-
-                logger.info("✓ Facebook language set to English (en_US)")
-                await self.send_update("✓ Facebook language configured")
-            except Exception as e:
-                logger.warning(f"Could not set Facebook locale cookies: {e}")
-                # Continue anyway as the URL may still work
-
-            # Navigate to Facebook Ads Center - simplified URL
+            # Navigate to Facebook Ads Center
             ads_center_url = "https://business.facebook.com/latest/ad_center/"
             logger.info(f"Navigating to: {ads_center_url}")
             await self.send_update(f"🌐 Going to: {ads_center_url}")
@@ -713,19 +683,6 @@ class InstagramAutomation:
             try:
                 self.driver.get(ads_center_url)
                 time.sleep(8)
-
-                # Force English language via JavaScript after page load
-                try:
-                    self.driver.execute_script("""
-                        document.documentElement.lang = 'en';
-                        if (window.localStorage) {
-                            localStorage.setItem('locale', 'en_US');
-                            localStorage.setItem('i18n_language', 'en_US');
-                        }
-                    """)
-                    logger.info("✓ JavaScript language override applied")
-                except Exception as js_error:
-                    logger.warning(f"Could not apply JavaScript language override: {js_error}")
 
                 self.take_screenshot("step5_navigated_to_ads_center")
 
