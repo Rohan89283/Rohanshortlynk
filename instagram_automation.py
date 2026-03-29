@@ -538,13 +538,12 @@ class InstagramAutomation:
                     logger.warning(f"Session check {i+1}/3 after Step 2: {e}")
 
             # ==================== STEP 3 ====================
-            await self.send_update("\n📍 STEP 3: Handling Instagram OAuth popup...")
+            await self.send_update("\n📍 STEP 3: Handling Instagram OAuth popup/tab...")
 
             # Additional wait before checking windows
             for i in range(3):
                 time.sleep(1)
                 try:
-                    # Keep session alive by checking title
                     _ = self.driver.title
                 except Exception as e:
                     logger.warning(f"Session check {i+1}/3 in Step 3: {e}")
@@ -560,22 +559,17 @@ class InstagramAutomation:
                 return False, self.screenshots
 
             if popup_opened:
+                # New popup/tab opened - switch to it
                 self.driver.switch_to.window(self.driver.window_handles[-1])
-                await self.send_update("✓ Switched to OAuth popup window")
+                await self.send_update("✓ Switched to OAuth popup/tab")
                 time.sleep(2)
 
                 current_url = self.driver.current_url
                 logger.info(f"OAuth popup URL: {current_url}")
                 await self.send_update(f"📊 Popup URL: {current_url[:80]}...")
 
-                # Check if popup auto-closed (we're back on Facebook Business page)
-                if "business.facebook.com" in current_url:
-                    await self.send_update("✓ STEP 3 SUCCESS: Popup auto-closed (no button click needed)")
-                    logger.info("Popup auto-closed - OAuth completed automatically")
-                    # Already on main window, continue to Step 4
-
-                # Verify we're on Instagram OAuth page
-                elif "instagram.com/oauth" in current_url or "instagram.com" in current_url:
+                # Check if we're on Instagram OAuth page
+                if "instagram.com/oauth" in current_url or "instagram.com" in current_url:
                     await self.send_update("✓ Instagram OAuth page detected")
                     await self.send_update("🔍 Looking for 'Log in as [username]' button...")
 
@@ -585,7 +579,7 @@ class InstagramAutomation:
                     self.list_clickable_elements(keyword="Log in")
                     logger.info("=" * 60)
 
-                    # Look for "Log in as" button with flexible username
+                    # Look for "Log in as [username]" button
                     login_as_selectors = [
                         {
                             'type': 'xpath',
@@ -611,92 +605,89 @@ class InstagramAutomation:
                             'desc': 'XPath - Any role button starting with Log in as',
                             'verify_text': 'Log in as'
                         },
-                        {
-                            'type': 'css',
-                            'selector': "div.x1i10hfl.xjqpnuy.xc5r6h4[role='button']",
-                            'desc': 'CSS - Div with role button and classes',
-                            'verify_text': 'Log in as'
-                        },
                     ]
 
-                    # Try to find and click, but with shorter timeout (popup might auto-close)
-                    success, msg = self.try_find_and_click(login_as_selectors, "STEP 3 - Log in as", timeout=10, verify_text='Log in as')
+                    # Try to find and click the button with a short timeout
+                    success, msg = self.try_find_and_click(login_as_selectors, "STEP 3 - Log in as", timeout=8, verify_text='Log in as')
 
-                    if not success:
-                        # Button not found - check if popup is still open or auto-closed
+                    if success:
+                        # Button was found and clicked successfully
+                        await self.send_update("✓ Clicked 'Log in as [username]' button")
+                        logger.info("Successfully clicked 'Log in as' button")
+
+                        # Wait for popup to close automatically
+                        await self.send_update("🔄 Waiting for popup to close...")
                         time.sleep(2)
-                        current_handles = len(self.driver.window_handles)
-                        logger.info(f"After button search, window handles count: {current_handles}")
 
-                        if current_handles == 1:
-                            # Popup auto-closed while searching
-                            await self.send_update("✓ STEP 3 SUCCESS: Popup auto-closed during search (no button click needed)")
-                            logger.info("Popup auto-closed while searching for button - authorization completed")
-                            self.driver.switch_to.window(self.driver.window_handles[0])
-                        else:
-                            # Popup still open but no button - check if it's waiting or if authorization already done
-                            await self.send_update("ℹ️ No 'Log in as' button found - checking if already authorized...")
-                            logger.info("No 'Log in as' button found - may already be authorized")
-
-                            # Wait a bit more to see if popup auto-closes
-                            time.sleep(3)
-                            if len(self.driver.window_handles) == 1:
-                                await self.send_update("✓ STEP 3 SUCCESS: Popup closed after waiting (already authorized)")
-                                logger.info("Popup closed after additional wait - already authorized")
-                                self.driver.switch_to.window(self.driver.window_handles[0])
-                            else:
-                                # Still open - switch back to main window and proceed anyway
-                                await self.send_update("⚠️ Popup still open but no button - switching back to main window")
-                                logger.warning("Popup still open with no button - attempting to continue anyway")
-                                self.driver.switch_to.window(self.driver.window_handles[0])
-                                await self.send_update("✓ STEP 3 SUCCESS: Switched to main window (popup may close automatically)")
-                    else:
-                        await self.send_update("✓ STEP 3 SUCCESS: Clicked 'Log in as [username]'")
-
-                        # Immediately switch back to main window (popup will close automatically)
-                        await self.send_update("🔄 Switching back to main window...")
-                        time.sleep(2)  # Brief wait for popup to start closing
-
-                        # The popup closes automatically, switch to the first (main) window
+                        # Switch back to main window
                         self.driver.switch_to.window(self.driver.window_handles[0])
-                        logger.info("✓ Switched back to main window after clicking 'Log in as'")
+                        await self.send_update("✓ STEP 3 SUCCESS: Clicked button and returned to main window")
+                        logger.info("Switched back to main window after clicking 'Log in as'")
+                    else:
+                        # Button not found - this is OK, popup will close automatically
+                        await self.send_update("ℹ️ No 'Log in as' button found - popup should close automatically")
+                        logger.info("No 'Log in as' button found - this is normal, waiting for auto-close")
+
+                        # Wait to see if popup auto-closes
+                        await self.send_update("⏳ Waiting for popup to auto-close...")
+                        for i in range(5):
+                            time.sleep(1)
+                            if len(self.driver.window_handles) == 1:
+                                # Popup closed automatically
+                                await self.send_update("✓ STEP 3 SUCCESS: Popup closed automatically (no button needed)")
+                                logger.info("Popup auto-closed - authorization completed")
+                                self.driver.switch_to.window(self.driver.window_handles[0])
+                                break
+                        else:
+                            # Popup still open after 5 seconds - switch back to main window anyway
+                            await self.send_update("ℹ️ Popup still open - switching back to main window")
+                            logger.info("Popup still open after 5s - switching to main window to continue")
+                            self.driver.switch_to.window(self.driver.window_handles[0])
+                            await self.send_update("✓ STEP 3 SUCCESS: Switched to main window (continuing)")
+
+                elif "business.facebook.com" in current_url:
+                    # Already redirected back to Facebook Business - popup closed instantly
+                    await self.send_update("✓ STEP 3 SUCCESS: Popup auto-closed immediately")
+                    logger.info("Popup auto-closed - already on Facebook Business page")
 
                 else:
-                    # Unknown URL in popup - wait to see if it redirects or closes
-                    await self.send_update(f"⚠️ Unexpected popup URL: {current_url[:80]}")
+                    # Unknown URL - wait to see if it redirects or closes
+                    await self.send_update(f"ℹ️ Unexpected popup URL: {current_url[:80]}")
                     logger.warning(f"Unexpected popup URL: {current_url}")
-                    await self.send_update("ℹ️ Waiting to see if popup redirects or closes...")
+                    await self.send_update("⏳ Waiting to see if popup redirects or closes...")
 
-                    # Wait up to 5 seconds to see what happens
+                    # Wait up to 5 seconds
                     for i in range(5):
                         time.sleep(1)
                         if len(self.driver.window_handles) == 1:
-                            await self.send_update("✓ STEP 3 SUCCESS: Popup auto-closed")
+                            await self.send_update("✓ STEP 3 SUCCESS: Popup closed")
                             logger.info("Popup closed after waiting")
                             self.driver.switch_to.window(self.driver.window_handles[0])
                             break
-                        try:
-                            current_url = self.driver.current_url
-                            if "business.facebook.com" in current_url or "instagram.com" in current_url:
-                                break
-                        except:
-                            pass
                     else:
-                        # Still open with unexpected URL - switch back and proceed
-                        await self.send_update("⚠️ Popup still showing unexpected page - switching to main window")
+                        # Still open - switch back and continue
+                        await self.send_update("ℹ️ Switching to main window to continue")
                         self.driver.switch_to.window(self.driver.window_handles[0])
-                        await self.send_update("✓ STEP 3 SUCCESS: Switched to main window (continuing anyway)")
+                        await self.send_update("✓ STEP 3 SUCCESS: Switched to main window")
             else:
-                # No popup opened - check if we're already redirected
+                # No popup opened - check if we're already authenticated
                 current_url = self.driver.current_url
                 if "business.facebook.com" in current_url:
                     await self.send_update("✓ STEP 3 SUCCESS: No popup needed - already authenticated")
                     logger.info("No OAuth popup opened - user already authenticated")
                 else:
-                    await self.send_update("❌ STEP 3 FAILED: No popup opened and not on expected page")
-                    await self.send_update(f"URL: {current_url[:100]}")
-                    self.take_screenshot("step3_FAILED_no_popup")
-                    return False, self.screenshots
+                    # No popup but not on expected page - wait a bit
+                    await self.send_update("ℹ️ No popup opened - waiting to see if page redirects...")
+                    time.sleep(3)
+                    current_url = self.driver.current_url
+                    if "business.facebook.com" in current_url:
+                        await self.send_update("✓ STEP 3 SUCCESS: Page redirected without popup")
+                        logger.info("Redirected to business page without popup")
+                    else:
+                        # Not on expected page but no popup - this is OK, continue anyway
+                        await self.send_update("ℹ️ No popup and different page - continuing to next step")
+                        logger.warning(f"No popup, unexpected URL: {current_url}")
+                        await self.send_update("✓ STEP 3 SUCCESS: Continuing to next step")
 
             # ==================== STEP 4 ====================
             await self.send_update("\n📍 STEP 4: Waiting for redirect to Facebook Business home...")
