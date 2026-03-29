@@ -539,60 +539,78 @@ class InstagramAutomation:
             self.take_screenshot("step4_SUCCESS_home_page")
 
             # ==================== STEP 5 ====================
-            await self.send_update("\n📍 STEP 5: Finding and clicking 'Create ad' button...")
+            await self.send_update("\n📍 STEP 5: Navigating to Facebook Ads Center...")
+            time.sleep(2)
+
+            # Navigate to Facebook Ads Center
+            ads_center_url = "https://business.facebook.com/latest/ad_center/ads_summary"
+            logger.info(f"Navigating to: {ads_center_url}")
+            await self.send_update(f"🌐 Going to: {ads_center_url}")
+
+            self.driver.get(ads_center_url)
+            time.sleep(5)
+
+            self.take_screenshot("step5_navigated_to_ads_center")
+
+            current_url = self.driver.current_url
+            logger.info(f"Step 5 URL after navigation: {current_url}")
+            await self.send_update(f"📊 Current URL: {current_url[:80]}...")
+
+            # Wait for page to load
+            await self.send_update("⏳ Waiting for Ads Center page to load...")
             time.sleep(3)
 
             # List all buttons for debugging
             logger.info("=" * 60)
             logger.info("STEP 5 - LISTING ALL BUTTONS:")
-            self.list_clickable_elements(keyword="Create")
+            self.list_clickable_elements(keyword="Get started")
             logger.info("=" * 60)
 
-            create_ad_selectors = [
+            get_started_selectors = [
                 {
                     'type': 'xpath',
-                    'selector': "//div[@class='x1vvvo52 x1fvot60 xk50ysn xxio538 x1heor9g xuxw1ft x6ikm8r x10wlt62 xlyipyv x1h4wwuj xeuugli' and text()='Create ad']",
-                    'desc': 'XPath - Exact div class with Create ad text',
-                    'verify_text': 'Create ad'
+                    'selector': "//div[text()='Get started']",
+                    'desc': 'XPath - Any div with Get started text',
+                    'verify_text': 'Get started'
                 },
                 {
                     'type': 'xpath',
-                    'selector': "//div[text()='Create ad']",
-                    'desc': 'XPath - Any div with Create ad text',
-                    'verify_text': 'Create ad'
+                    'selector': "//*[@role='button' and contains(text(), 'Get started')]",
+                    'desc': 'XPath - Role button containing Get started',
+                    'verify_text': 'Get started'
                 },
                 {
                     'type': 'xpath',
-                    'selector': "//*[contains(text(), 'Create ad')]",
-                    'desc': 'XPath - Any element containing Create ad',
-                    'verify_text': 'Create ad'
+                    'selector': "//*[contains(text(), 'Get started')]",
+                    'desc': 'XPath - Any element containing Get started',
+                    'verify_text': 'Get started'
                 },
                 {
                     'type': 'xpath',
-                    'selector': "//div[contains(@class, 'x1vvvo52')]//div[text()='Create ad']",
-                    'desc': 'XPath - Div with x1vvvo52 class containing Create ad',
-                    'verify_text': 'Create ad'
+                    'selector': "//div[@class='x1vvvo52 x1fvot60 xk50ysn xxio538 x1heor9g xuxw1ft x6ikm8r x10wlt62 xlyipyv x1h4wwuj xeuugli' and text()='Get started']",
+                    'desc': 'XPath - Exact div class with Get started text',
+                    'verify_text': 'Get started'
                 },
                 {
                     'type': 'xpath',
-                    'selector': "//div[contains(@class, 'xeuugli') and text()='Create ad']",
-                    'desc': 'XPath - Div with xeuugli class and Create ad text',
-                    'verify_text': 'Create ad'
+                    'selector': "//div[contains(@class, 'x1vvvo52')]//div[text()='Get started']",
+                    'desc': 'XPath - Div with x1vvvo52 class containing Get started',
+                    'verify_text': 'Get started'
                 },
             ]
 
-            success, msg = self.try_find_and_click(create_ad_selectors, "STEP 5 - Create ad", timeout=15, verify_text='Create ad', check_iframes=True)
+            success, msg = self.try_find_and_click(get_started_selectors, "STEP 5 - Get started", timeout=15, verify_text='Get started', check_iframes=True)
             await self.send_update(msg)
 
             if not success:
-                await self.send_update("❌ STEP 5 FAILED: Could not find 'Create ad' button")
-                self.take_screenshot("step5_FAILED_no_create_ad")
+                await self.send_update("❌ STEP 5 FAILED: Could not find 'Get started' button")
+                self.take_screenshot("step5_FAILED_no_get_started")
                 return False, self.screenshots
 
-            await self.send_update("✓ STEP 5 SUCCESS: Clicked 'Create ad' button")
+            await self.send_update("✓ STEP 5 SUCCESS: Clicked 'Get started' button")
             time.sleep(5)
 
-            self.take_screenshot("step5_SUCCESS_clicked_create_ad")
+            self.take_screenshot("step5_SUCCESS_clicked_get_started")
 
             # ==================== STEP 6 ====================
             await self.send_update("\n📍 STEP 6: Navigated to boosted item picker, clicking first 'Continue'...")
