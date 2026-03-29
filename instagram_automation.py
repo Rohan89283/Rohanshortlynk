@@ -501,7 +501,7 @@ class InstagramAutomation:
                 {
                     'type': 'xpath',
                     'selector': "//span[@class='x1lliihq x193iq5w x6ikm8r x10wlt62 xlyipyv xuxw1ft' and text()='Log in with Instagram']",
-                    'desc': 'XPath - Exact span class and text',
+                    'desc': 'XPath - Exact span class and text (WORKED)',
                     'verify_text': 'Instagram'
                 },
                 {
@@ -512,26 +512,8 @@ class InstagramAutomation:
                 },
                 {
                     'type': 'xpath',
-                    'selector': "//span[@class='x1lliihq x193iq5w x6ikm8r x10wlt62 xlyipyv xuxw1ft']",
-                    'desc': 'XPath - Span with exact classes',
-                    'verify_text': 'Instagram'
-                },
-                {
-                    'type': 'xpath',
-                    'selector': "//div[@role='button'][.//span[contains(text(), 'Log in with Instagram')]]",
-                    'desc': 'XPath - Button containing Instagram span',
-                    'verify_text': 'Instagram'
-                },
-                {
-                    'type': 'xpath',
                     'selector': "//div[@role='button' and contains(., 'Log in with Instagram') and not(contains(., 'Facebook'))]",
                     'desc': 'XPath - Instagram button (excluding Facebook)',
-                    'verify_text': 'Instagram'
-                },
-                {
-                    'type': 'xpath',
-                    'selector': "//span[contains(@class, 'x1lliihq') and text()='Log in with Instagram']/parent::*",
-                    'desc': 'XPath - Span parent element',
                     'verify_text': 'Instagram'
                 },
             ]
@@ -779,31 +761,13 @@ class InstagramAutomation:
                 {
                     'type': 'xpath',
                     'selector': "//div[text()='Get started']",
-                    'desc': 'XPath - Any div with Get started text',
+                    'desc': 'XPath - Any div with Get started text (WORKED)',
                     'verify_text': 'Get started'
                 },
                 {
                     'type': 'xpath',
                     'selector': "//*[@role='button' and contains(text(), 'Get started')]",
                     'desc': 'XPath - Role button containing Get started',
-                    'verify_text': 'Get started'
-                },
-                {
-                    'type': 'xpath',
-                    'selector': "//*[contains(text(), 'Get started')]",
-                    'desc': 'XPath - Any element containing Get started',
-                    'verify_text': 'Get started'
-                },
-                {
-                    'type': 'xpath',
-                    'selector': "//div[@class='x1vvvo52 x1fvot60 xk50ysn xxio538 x1heor9g xuxw1ft x6ikm8r x10wlt62 xlyipyv x1h4wwuj xeuugli' and text()='Get started']",
-                    'desc': 'XPath - Exact div class with Get started text',
-                    'verify_text': 'Get started'
-                },
-                {
-                    'type': 'xpath',
-                    'selector': "//div[contains(@class, 'x1vvvo52')]//div[text()='Get started']",
-                    'desc': 'XPath - Div with x1vvvo52 class containing Get started',
                     'verify_text': 'Get started'
                 },
             ]
@@ -842,38 +806,20 @@ class InstagramAutomation:
             continue_selectors_step6 = [
                 {
                     'type': 'xpath',
+                    'selector': "//div[text()='Continue']",
+                    'desc': 'XPath - Any div with Continue text (WORKED)',
+                    'verify_text': 'Continue'
+                },
+                {
+                    'type': 'xpath',
                     'selector': "//div[@role='dialog']//div[text()='Continue']",
                     'desc': 'XPath - Continue button inside dialog modal',
                     'verify_text': 'Continue'
                 },
                 {
                     'type': 'xpath',
-                    'selector': "//div[contains(@aria-label, 'dialog') or contains(@role, 'dialog')]//div[text()='Continue']",
-                    'desc': 'XPath - Continue button inside aria-label dialog',
-                    'verify_text': 'Continue'
-                },
-                {
-                    'type': 'xpath',
-                    'selector': "//div[text()='Continue']",
-                    'desc': 'XPath - Any div with Continue text',
-                    'verify_text': 'Continue'
-                },
-                {
-                    'type': 'xpath',
                     'selector': "//*[@role='button' and contains(text(), 'Continue')]",
                     'desc': 'XPath - Role button containing Continue',
-                    'verify_text': 'Continue'
-                },
-                {
-                    'type': 'xpath',
-                    'selector': "//*[contains(text(), 'Continue')]",
-                    'desc': 'XPath - Any element containing Continue',
-                    'verify_text': 'Continue'
-                },
-                {
-                    'type': 'xpath',
-                    'selector': "//div[@class='x1vvvo52 x1fvot60 xk50ysn xxio538 x1heor9g xuxw1ft x6ikm8r x10wlt62 xlyipyv x1h4wwuj xeuugli' and text()='Continue']",
-                    'desc': 'XPath - Exact div class with Continue text (fallback)',
                     'verify_text': 'Continue'
                 },
             ]
@@ -903,13 +849,7 @@ class InstagramAutomation:
                 {
                     'type': 'xpath',
                     'selector': "//div[@role='dialog']//div[text()='Continue']",
-                    'desc': 'XPath - Continue button inside dialog modal',
-                    'verify_text': 'Continue'
-                },
-                {
-                    'type': 'xpath',
-                    'selector': "//div[contains(@aria-label, 'dialog') or contains(@role, 'dialog')]//div[text()='Continue']",
-                    'desc': 'XPath - Continue button inside aria-label dialog',
+                    'desc': 'XPath - Continue button inside dialog modal (WORKED)',
                     'verify_text': 'Continue'
                 },
                 {
@@ -922,18 +862,6 @@ class InstagramAutomation:
                     'type': 'xpath',
                     'selector': "//*[@role='button' and contains(text(), 'Continue')]",
                     'desc': 'XPath - Role button containing Continue',
-                    'verify_text': 'Continue'
-                },
-                {
-                    'type': 'xpath',
-                    'selector': "//*[contains(text(), 'Continue')]",
-                    'desc': 'XPath - Any element containing Continue',
-                    'verify_text': 'Continue'
-                },
-                {
-                    'type': 'xpath',
-                    'selector': "//div[@class='x6s0dn4 x78zum5 x1q0g3np xozqiw3 x2lwn1j xeuugli x1iyjqo2 x8va1my x1hc1fzr x13dflua x6o7n8i xxziih7 x12w9bfk xl56j7k xh8yej3']//div[@class='x1vvvo52 x1fvot60 xk50ysn xxio538 x1heor9g xuxw1ft x6ikm8r x10wlt62 xlyipyv x1h4wwuj xeuugli' and text()='Continue']",
-                    'desc': 'XPath - Exact nested div classes with Continue text (fallback)',
                     'verify_text': 'Continue'
                 },
             ]
@@ -979,7 +907,7 @@ class InstagramAutomation:
                 {
                     'type': 'xpath',
                     'selector': "//button[@class='_42ft _4jy0 layerConfirm _1-af _4jy6 _4jy1 selected _51sy' and @name='__CONFIRM__' and @type='submit' and starts-with(text(), 'Continue as')]",
-                    'desc': 'XPath - Exact button class with Continue as text',
+                    'desc': 'XPath - Exact button class with Continue as text (WORKED)',
                     'verify_text': 'Continue as'
                 },
                 {
@@ -990,26 +918,8 @@ class InstagramAutomation:
                 },
                 {
                     'type': 'xpath',
-                    'selector': "//button[@type='submit' and contains(text(), 'Continue as')]",
-                    'desc': 'XPath - Submit button with Continue as text',
-                    'verify_text': 'Continue as'
-                },
-                {
-                    'type': 'xpath',
-                    'selector': "//button[contains(@class, 'layerConfirm') and contains(text(), 'Continue as')]",
-                    'desc': 'XPath - Button with layerConfirm class',
-                    'verify_text': 'Continue as'
-                },
-                {
-                    'type': 'xpath',
                     'selector': "//button[contains(text(), 'Continue as')]",
                     'desc': 'XPath - Any button containing Continue as',
-                    'verify_text': 'Continue as'
-                },
-                {
-                    'type': 'css',
-                    'selector': "button._42ft._4jy0.layerConfirm[name='__CONFIRM__']",
-                    'desc': 'CSS - Button with exact classes and __CONFIRM__ name',
                     'verify_text': 'Continue as'
                 },
             ]
@@ -1045,10 +955,80 @@ class InstagramAutomation:
             logger.info(f"Main window URL: {current_url}")
             await self.send_update(f"📊 Main window URL: {current_url[:80]}...")
 
+            # ==================== STEP 9 ====================
+            await self.send_update("\n📍 STEP 9: Back on main window, clicking third 'Continue' button...")
+            time.sleep(3)
+
+            # List all buttons for debugging
+            logger.info("=" * 60)
+            logger.info("STEP 9 - LISTING ALL BUTTONS:")
+            self.list_clickable_elements(keyword="Continue")
+            logger.info("=" * 60)
+
+            continue_selectors_step9 = [
+                {
+                    'type': 'xpath',
+                    'selector': "//div[@role='dialog']//div[text()='Continue']",
+                    'desc': 'XPath - Continue button inside dialog modal',
+                    'verify_text': 'Continue'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//div[text()='Continue']",
+                    'desc': 'XPath - Any div with Continue text',
+                    'verify_text': 'Continue'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//*[@role='button' and contains(text(), 'Continue')]",
+                    'desc': 'XPath - Role button containing Continue',
+                    'verify_text': 'Continue'
+                },
+            ]
+
+            success, msg = self.try_find_and_click(continue_selectors_step9, "STEP 9 - Third Continue", timeout=15, verify_text='Continue', check_iframes=False)
+            await self.send_update(msg)
+
+            if not success:
+                await self.send_update("❌ STEP 9 FAILED: Could not find third 'Continue' button")
+                self.take_screenshot("step9_FAILED_no_continue")
+                return False, self.screenshots
+
+            await self.send_update("✓ STEP 9 SUCCESS: Clicked third 'Continue' button")
+            time.sleep(3)
+
+            # Check if new tab opened and auto-closes
+            await self.send_update("⏳ Waiting for final authorization tab to open and close...")
+            time.sleep(5)
+
+            # If a new tab opened, it should close automatically
+            if len(self.driver.window_handles) > 1:
+                await self.send_update("✓ New tab detected, waiting for auto-close...")
+                # Wait for tab to close
+                for i in range(10):
+                    time.sleep(1)
+                    if len(self.driver.window_handles) == 1:
+                        await self.send_update("✓ Tab auto-closed successfully")
+                        break
+                else:
+                    # If tab didn't close after 10 seconds, close it manually
+                    await self.send_update("⚠️ Tab didn't auto-close, closing manually...")
+                    if len(self.driver.window_handles) > 1:
+                        self.driver.switch_to.window(self.driver.window_handles[-1])
+                        self.driver.close()
+                        self.driver.switch_to.window(self.driver.window_handles[0])
+            else:
+                await self.send_update("✓ No new tab opened or already closed")
+
+            # Get final URL
+            current_url = self.driver.current_url
+            logger.info(f"Final URL after Step 9: {current_url}")
+            await self.send_update(f"📊 Final URL: {current_url[:100]}...")
+
             # ==================== FINAL ====================
-            await self.send_update("\n✅ ALL 8 STEPS COMPLETED SUCCESSFULLY!")
+            await self.send_update("\n✅ ALL 9 STEPS COMPLETED SUCCESSFULLY!")
             await self.send_update("✅ Instagram account fully connected to Facebook Business Manager")
-            await self.send_update("✅ Authorization completed successfully")
+            await self.send_update("✅ Full authorization flow completed successfully")
             await self.send_update(f"✅ Final URL: {current_url[:100]}")
             await self.send_update(f"\n📊 Total screenshots captured: {len(self.screenshots)}")
 
