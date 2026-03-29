@@ -72,7 +72,7 @@ class InstagramAutomation:
             ua = UserAgent()
             options.add_argument(f'user-agent={ua.random}')
 
-            self.driver = uc.Chrome(options=options, version_main=131, use_subprocess=False)
+            self.driver = uc.Chrome(options=options, use_subprocess=False)
             self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
             logger.info(f"Chrome driver initialized with user agent: {ua.random}")
