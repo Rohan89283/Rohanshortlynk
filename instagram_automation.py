@@ -609,12 +609,12 @@ class InstagramAutomation:
                         },
                     ]
 
-                    # Try to find and click "Log in as [username]" button
-                    success, msg = self.try_find_and_click(login_as_selectors, "STEP 3 - Log in as username", timeout=10, verify_text='Log in as', check_iframes=False)
+                    # MUST find and click "Log in as [username]" button
+                    success, msg = self.try_find_and_click(login_as_selectors, "STEP 3 - Log in as username", timeout=15, verify_text='Log in as', check_iframes=False)
 
                     if success:
-                        # Button found and clicked
-                        await self.send_update("✓ STEP 3 SUCCESS: Clicked 'Log in as [username]' button")
+                        # Button found and clicked - SUCCESS
+                        await self.send_update("✅ STEP 3 SUCCESS: Clicked 'Log in as [username]' button")
                         logger.info("Successfully clicked 'Log in as' button on OAuth page")
 
                         # Popup will close automatically, switch back to main window
@@ -622,24 +622,14 @@ class InstagramAutomation:
                         self.driver.switch_to.window(self.driver.window_handles[0])
                         await self.send_update("✓ Returned to main window")
                     else:
-                        # Button not found - popup will close automatically (this is normal)
-                        await self.send_update("ℹ️ No 'Log in as' button found - popup will close automatically")
-                        logger.info("No 'Log in as' button - this is normal, popup auto-closes")
+                        # Button NOT found - this is a FAILURE
+                        await self.send_update("❌ STEP 3 FAILED: Could not find 'Log in as [username]' button on OAuth page")
+                        logger.error("Failed to find 'Log in as' button on OAuth page")
+                        self.take_screenshot("step3_FAILED_no_login_button")
 
-                        # Wait for popup to auto-close
-                        await self.send_update("⏳ Waiting for popup to auto-close...")
-                        for i in range(6):
-                            time.sleep(1)
-                            if len(self.driver.window_handles) == 1:
-                                await self.send_update("✓ STEP 3 SUCCESS: Popup closed automatically")
-                                logger.info("Popup auto-closed successfully")
-                                self.driver.switch_to.window(self.driver.window_handles[0])
-                                break
-                        else:
-                            # Popup still open - switch back anyway
-                            await self.send_update("✓ STEP 3 SUCCESS: Switching back to main window")
-                            logger.info("Popup still open, switching to main window")
-                            self.driver.switch_to.window(self.driver.window_handles[0])
+                        # Switch back to main window before returning failure
+                        self.driver.switch_to.window(self.driver.window_handles[0])
+                        return False, self.screenshots
                 else:
                     # Not on Instagram OAuth page - just switch back
                     await self.send_update(f"ℹ️ Popup is not Instagram OAuth page")
