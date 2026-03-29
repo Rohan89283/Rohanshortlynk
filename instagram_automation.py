@@ -168,19 +168,44 @@ class InstagramAutomation:
 
     def try_find_and_click(self, selectors, step_name, timeout=10, verify_text=None, check_iframes=True):
         """Try multiple selectors to find and click an element with verification"""
+        logger.info("\n" + "🔎" * 40)
+        logger.info(f"🔎 SEARCHING FOR: {step_name}")
+        logger.info(f"🔎 Check iframes: {check_iframes}")
+        logger.info("🔎" * 40 + "\n")
+
         # First try in main content
+        logger.info("📄 Searching in MAIN CONTENT...")
         success, msg = self._try_find_and_click_internal(selectors, step_name, timeout, verify_text)
         if success:
+            logger.info(f"✓✓✓ FOUND IN MAIN CONTENT: {step_name}")
             return success, msg
+
+        logger.info(f"❌ NOT FOUND in main content")
 
         # If not found and check_iframes is True, try in iframes
         if check_iframes:
-            logger.info(f"Element not found in main content, checking iframes...")
+            logger.info(f"\n🖼️  Checking iframes...")
             iframes = self.check_iframes()
+            logger.info(f"🖼️  Found {len(iframes)} iframes on page")
 
             for idx, iframe in enumerate(iframes):
                 try:
-                    logger.info(f"Switching to iframe {idx+1}/{len(iframes)}")
+                    logger.info(f"\n{'='*60}")
+                    logger.info(f"🖼️  [IFRAME {idx+1}/{len(iframes)}] Switching to iframe...")
+
+                    # Try to get iframe info
+                    try:
+                        iframe_id = iframe.get_attribute('id')
+                        iframe_name = iframe.get_attribute('name')
+                        iframe_src = iframe.get_attribute('src')
+                        logger.info(f"   ID: {iframe_id}")
+                        logger.info(f"   Name: {iframe_name}")
+                        logger.info(f"   Src: {iframe_src[:80] if iframe_src else 'None'}")
+                    except:
+                        logger.info(f"   Could not get iframe details")
+
+                    logger.info(f"{'='*60}")
+
                     self.driver.switch_to.frame(iframe)
 
                     success, msg = self._try_find_and_click_internal(selectors, step_name, timeout, verify_text)
@@ -189,17 +214,26 @@ class InstagramAutomation:
                     self.driver.switch_to.default_content()
 
                     if success:
+                        logger.info(f"✓✓✓ FOUND IN IFRAME {idx+1}: {step_name}")
                         return True, f"{msg} (found in iframe {idx+1})"
+                    else:
+                        logger.info(f"❌ NOT FOUND in iframe {idx+1}")
 
                 except Exception as e:
-                    logger.debug(f"Error in iframe {idx+1}: {e}")
+                    logger.warning(f"❌ Error in iframe {idx+1}: {str(e)[:100]}")
                     self.driver.switch_to.default_content()
                     continue
 
+        logger.error(f"❌❌❌ FINAL FAILURE: '{step_name}' not found in main content or any iframes")
         return False, f"✗ {step_name}: Not found in main content or iframes"
 
     def _try_find_and_click_internal(self, selectors, step_name, timeout=10, verify_text=None):
         """Internal method to find and click element"""
+        logger.info("=" * 80)
+        logger.info(f"🔍 ATTEMPTING TO FIND AND CLICK: {step_name}")
+        logger.info(f"Total selectors to try: {len(selectors)}")
+        logger.info("=" * 80)
+
         for idx, selector_info in enumerate(selectors, 1):
             selector_type = selector_info.get('type', 'xpath')
             selector = selector_info.get('selector')
@@ -207,7 +241,13 @@ class InstagramAutomation:
             expected_text = selector_info.get('verify_text', verify_text)
 
             try:
-                logger.info(f"[{idx}/{len(selectors)}] Trying {selector_type}: {description[:60]}")
+                logger.info(f"\n{'='*60}")
+                logger.info(f"[ATTEMPT {idx}/{len(selectors)}]")
+                logger.info(f"Selector Type: {selector_type}")
+                logger.info(f"Description: {description}")
+                logger.info(f"Selector: {selector}")
+                logger.info(f"Expected Text: {expected_text}")
+                logger.info(f"{'='*60}")
 
                 if selector_type == 'xpath':
                     element = WebDriverWait(self.driver, timeout).until(
@@ -222,36 +262,61 @@ class InstagramAutomation:
                         EC.presence_of_element_located((By.CLASS_NAME, selector))
                     )
                 else:
-                    logger.debug(f"Unknown selector type: {selector_type}")
+                    logger.warning(f"❌ Unknown selector type: {selector_type}")
                     continue
+
+                logger.info(f"✓ Element FOUND using {selector_type}")
+                logger.info(f"   Tag name: {element.tag_name}")
+
+                # Get element location
+                try:
+                    location = element.location
+                    size = element.size
+                    logger.info(f"   Location: x={location['x']}, y={location['y']}")
+                    logger.info(f"   Size: width={size['width']}, height={size['height']}")
+                except Exception as e:
+                    logger.debug(f"   Could not get element location/size: {e}")
 
                 # Verify element text if required
                 if expected_text:
                     element_text = element.text.strip()
-                    logger.info(f"Element found. Text: '{element_text}'")
+                    logger.info(f"   Element text: '{element_text}'")
                     if expected_text.lower() not in element_text.lower():
-                        logger.debug(f"Text mismatch: Expected '{expected_text}', got '{element_text}'")
+                        logger.warning(f"❌ Text mismatch: Expected '{expected_text}', got '{element_text}'")
                         continue
-                    logger.info(f"✓ Text verified: '{expected_text}' found in '{element_text}'")
+                    logger.info(f"✓ Text VERIFIED: '{expected_text}' found in '{element_text}'")
                 else:
-                    logger.info(f"Element found: {element.tag_name}")
+                    try:
+                        element_text = element.text.strip()
+                        if element_text:
+                            logger.info(f"   Element text: '{element_text}'")
+                    except:
+                        pass
 
                 # Check if element is visible and enabled
-                if not element.is_displayed():
-                    logger.debug(f"Element not visible, skipping")
+                is_displayed = element.is_displayed()
+                is_enabled = element.is_enabled()
+
+                logger.info(f"   Is visible: {is_displayed}")
+                logger.info(f"   Is enabled: {is_enabled}")
+
+                if not is_displayed:
+                    logger.warning(f"❌ Element not visible, skipping")
                     continue
 
-                if not element.is_enabled():
-                    logger.debug(f"Element not enabled, skipping")
+                if not is_enabled:
+                    logger.warning(f"❌ Element not enabled, skipping")
                     continue
 
-                logger.info(f"✓ Element is visible and enabled")
+                logger.info(f"✓ Element is VISIBLE and ENABLED")
 
                 # Scroll into view
+                logger.info("   Scrolling element into view...")
                 self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
                 time.sleep(0.8)
 
                 # Highlight element briefly for debugging
+                logger.info("   Highlighting element...")
                 original_style = element.get_attribute('style')
                 self.driver.execute_script("arguments[0].setAttribute('style', arguments[1]);",
                                          element, original_style + "border: 3px solid red;")
@@ -263,48 +328,70 @@ class InstagramAutomation:
                 click_success = False
                 click_method = "unknown"
 
+                logger.info("   Attempting to click element...")
+
                 # Method 1: Regular click
                 try:
+                    logger.info("   [CLICK METHOD 1] Trying element.click()...")
                     element.click()
                     click_success = True
                     click_method = "element.click()"
-                    logger.info(f"✓ Clicked using: {click_method}")
+                    logger.info(f"✓✓✓ SUCCESSFULLY CLICKED using: {click_method}")
                 except Exception as e1:
-                    logger.debug(f"Method 1 (element.click) failed: {str(e1)[:50]}")
+                    logger.warning(f"   [CLICK METHOD 1] Failed: {str(e1)[:100]}")
 
                     # Method 2: JavaScript click
                     try:
+                        logger.info("   [CLICK METHOD 2] Trying JavaScript click...")
                         self.driver.execute_script("arguments[0].click();", element)
                         click_success = True
-                        click_method = "javascript click"
-                        logger.info(f"✓ Clicked using: {click_method}")
+                        click_method = "JavaScript click"
+                        logger.info(f"✓✓✓ SUCCESSFULLY CLICKED using: {click_method}")
                     except Exception as e2:
-                        logger.debug(f"Method 2 (JS click) failed: {str(e2)[:50]}")
+                        logger.warning(f"   [CLICK METHOD 2] Failed: {str(e2)[:100]}")
 
                         # Method 3: Action chains
                         try:
+                            logger.info("   [CLICK METHOD 3] Trying ActionChains...")
                             from selenium.webdriver.common.action_chains import ActionChains
                             ActionChains(self.driver).move_to_element(element).click().perform()
                             click_success = True
                             click_method = "ActionChains"
-                            logger.info(f"✓ Clicked using: {click_method}")
+                            logger.info(f"✓✓✓ SUCCESSFULLY CLICKED using: {click_method}")
                         except Exception as e3:
-                            logger.debug(f"Method 3 (ActionChains) failed: {str(e3)[:50]}")
+                            logger.warning(f"   [CLICK METHOD 3] Failed: {str(e3)[:100]}")
 
                 if click_success:
-                    success_msg = f"✓ {step_name}: SUCCESS using {selector_type} - {description[:40]}"
-                    logger.info(success_msg)
-                    logger.info(f"Click method: {click_method}")
-                    return True, f"{success_msg} (Method: {click_method})"
+                    logger.info("=" * 80)
+                    logger.info(f"🎉🎉🎉 SUCCESS SUMMARY FOR {step_name} 🎉🎉🎉")
+                    logger.info(f"   ✓ Found with: {selector_type}")
+                    logger.info(f"   ✓ Selector: {selector}")
+                    logger.info(f"   ✓ Description: {description}")
+                    logger.info(f"   ✓ Clicked with: {click_method}")
+                    logger.info(f"   ✓ Attempt number: {idx}/{len(selectors)}")
+                    logger.info(f"   ✓ Step: {step_name}")
+                    logger.info("=" * 80 + "\n")
+                    success_msg = f"✓ {step_name}: SUCCESS | Selector: {selector_type} | Click: {click_method} | Attempt: {idx}/{len(selectors)}"
+                    return True, success_msg
                 else:
-                    logger.debug(f"All click methods failed for this element")
+                    logger.warning(f"❌ ALL 3 CLICK METHODS FAILED for this element")
                     continue
 
+            except TimeoutException:
+                logger.warning(f"⏱️  TIMEOUT: Element not found with {selector_type} within {timeout}s")
+                logger.warning(f"   Selector: {selector}")
+                continue
             except Exception as e:
-                logger.debug(f"✗ {step_name}: {selector_type} '{description[:30]}...' failed - {str(e)[:100]}")
+                logger.warning(f"❌ EXCEPTION with {selector_type}")
+                logger.warning(f"   Description: {description[:50]}")
+                logger.warning(f"   Error: {str(e)[:150]}")
                 continue
 
-        logger.error(f"❌ {step_name}: All {len(selectors)} selectors failed!")
+        logger.error("=" * 80)
+        logger.error(f"❌❌❌ COMPLETE FAILURE FOR: {step_name}")
+        logger.error(f"   Tried {len(selectors)} different selectors")
+        logger.error(f"   None of them worked")
+        logger.error("=" * 80)
         return False, f"✗ {step_name}: All selectors failed (tried {len(selectors)} methods)"
 
     def check_url_contains(self, expected_substring):
@@ -542,8 +629,31 @@ class InstagramAutomation:
             await self.send_update("\n📍 STEP 5: Navigating to Facebook Ads Center...")
             time.sleep(2)
 
-            # Navigate to Facebook Ads Center
-            ads_center_url = "https://business.facebook.com/latest/ad_center/ads_summary"
+            # Force Facebook to English by setting locale cookie
+            logger.info("🌍 Forcing Facebook Business to English language...")
+            await self.send_update("🌍 Setting Facebook to English...")
+
+            try:
+                # First visit Facebook to set the domain for cookies
+                self.driver.get("https://business.facebook.com")
+                time.sleep(2)
+
+                # Set locale cookie to English (United States)
+                self.driver.add_cookie({
+                    'name': 'locale',
+                    'value': 'en_US',
+                    'domain': '.facebook.com',
+                    'path': '/'
+                })
+
+                logger.info("✓ Facebook language set to English (en_US)")
+                await self.send_update("✓ Facebook language configured")
+            except Exception as e:
+                logger.warning(f"Could not set Facebook locale cookie: {e}")
+                # Continue anyway as the URL may still work
+
+            # Navigate to Facebook Ads Center with locale parameter
+            ads_center_url = "https://business.facebook.com/latest/ad_center/ads_summary?locale=en_US"
             logger.info(f"Navigating to: {ads_center_url}")
             await self.send_update(f"🌐 Going to: {ads_center_url}")
 
