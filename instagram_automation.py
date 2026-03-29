@@ -42,6 +42,12 @@ class InstagramAutomation:
     def setup_driver(self):
         """Setup undetected Chrome driver"""
         try:
+            import subprocess
+
+            chrome_version_output = subprocess.check_output(['google-chrome', '--version']).decode('utf-8')
+            chrome_version = chrome_version_output.split()[-1].split('.')[0]
+            logger.info(f"Detected Chrome version: {chrome_version}")
+
             options = uc.ChromeOptions()
             options.add_argument('--no-sandbox')
             options.add_argument('--disable-dev-shm-usage')
@@ -72,7 +78,7 @@ class InstagramAutomation:
             ua = UserAgent()
             options.add_argument(f'user-agent={ua.random}')
 
-            self.driver = uc.Chrome(options=options, use_subprocess=False)
+            self.driver = uc.Chrome(options=options, version_main=int(chrome_version), use_subprocess=False)
             self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
             logger.info(f"Chrome driver initialized with user agent: {ua.random}")
