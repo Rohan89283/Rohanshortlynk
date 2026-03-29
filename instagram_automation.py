@@ -120,47 +120,192 @@ class InstagramAutomation:
             logger.error(f"❌ Failed to set cookies: {e}")
             return False
 
-    def try_find_and_click(self, selectors, step_name, timeout=10):
-        """Try multiple selectors to find and click an element"""
-        for selector_info in selectors:
+    def list_clickable_elements(self, keyword=None):
+        """List all clickable elements on the page, optionally filtered by keyword"""
+        try:
+            buttons = self.driver.find_elements(By.XPATH, "//*[@role='button' or self::button or self::a]")
+            logger.info(f"Found {len(buttons)} clickable elements on page")
+
+            filtered = []
+            for idx, btn in enumerate(buttons[:20]):
+                try:
+                    text = btn.text.strip()[:60]
+                    tag = btn.tag_name
+                    role = btn.get_attribute('role') or 'no-role'
+
+                    if keyword:
+                        if keyword.lower() in text.lower():
+                            filtered.append(btn)
+                            logger.info(f"  ✓ Match {len(filtered)}: <{tag}> role='{role}' text='{text}'")
+                    else:
+                        logger.info(f"  Element {idx+1}: <{tag}> role='{role}' text='{text}'")
+                except:
+                    pass
+
+            if keyword:
+                logger.info(f"Found {len(filtered)} elements matching '{keyword}'")
+                return filtered
+            return buttons[:20]
+
+        except Exception as e:
+            logger.debug(f"Error listing elements: {e}")
+            return []
+
+    def check_iframes(self):
+        """Check and list all iframes on the page"""
+        try:
+            iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
+            logger.info(f"Found {len(iframes)} iframe(s) on page")
+            for idx, iframe in enumerate(iframes):
+                iframe_id = iframe.get_attribute('id') or 'no-id'
+                iframe_name = iframe.get_attribute('name') or 'no-name'
+                iframe_src = iframe.get_attribute('src') or 'no-src'
+                logger.info(f"  Iframe {idx+1}: id='{iframe_id}', name='{iframe_name}', src='{iframe_src[:60]}'")
+            return iframes
+        except Exception as e:
+            logger.debug(f"Error checking iframes: {e}")
+            return []
+
+    def try_find_and_click(self, selectors, step_name, timeout=10, verify_text=None, check_iframes=True):
+        """Try multiple selectors to find and click an element with verification"""
+        # First try in main content
+        success, msg = self._try_find_and_click_internal(selectors, step_name, timeout, verify_text)
+        if success:
+            return success, msg
+
+        # If not found and check_iframes is True, try in iframes
+        if check_iframes:
+            logger.info(f"Element not found in main content, checking iframes...")
+            iframes = self.check_iframes()
+
+            for idx, iframe in enumerate(iframes):
+                try:
+                    logger.info(f"Switching to iframe {idx+1}/{len(iframes)}")
+                    self.driver.switch_to.frame(iframe)
+
+                    success, msg = self._try_find_and_click_internal(selectors, step_name, timeout, verify_text)
+
+                    # Switch back to main content
+                    self.driver.switch_to.default_content()
+
+                    if success:
+                        return True, f"{msg} (found in iframe {idx+1})"
+
+                except Exception as e:
+                    logger.debug(f"Error in iframe {idx+1}: {e}")
+                    self.driver.switch_to.default_content()
+                    continue
+
+        return False, f"✗ {step_name}: Not found in main content or iframes"
+
+    def _try_find_and_click_internal(self, selectors, step_name, timeout=10, verify_text=None):
+        """Internal method to find and click element"""
+        for idx, selector_info in enumerate(selectors, 1):
             selector_type = selector_info.get('type', 'xpath')
             selector = selector_info.get('selector')
             description = selector_info.get('desc', selector)
+            expected_text = selector_info.get('verify_text', verify_text)
 
             try:
+                logger.info(f"[{idx}/{len(selectors)}] Trying {selector_type}: {description[:60]}")
+
                 if selector_type == 'xpath':
                     element = WebDriverWait(self.driver, timeout).until(
-                        EC.element_to_be_clickable((By.XPATH, selector))
+                        EC.presence_of_element_located((By.XPATH, selector))
                     )
                 elif selector_type == 'css':
                     element = WebDriverWait(self.driver, timeout).until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+                        EC.presence_of_element_located((By.CSS_SELECTOR, selector))
                     )
                 elif selector_type == 'class':
                     element = WebDriverWait(self.driver, timeout).until(
-                        EC.element_to_be_clickable((By.CLASS_NAME, selector))
+                        EC.presence_of_element_located((By.CLASS_NAME, selector))
                     )
                 else:
+                    logger.debug(f"Unknown selector type: {selector_type}")
                     continue
+
+                # Verify element text if required
+                if expected_text:
+                    element_text = element.text.strip()
+                    logger.info(f"Element found. Text: '{element_text}'")
+                    if expected_text.lower() not in element_text.lower():
+                        logger.debug(f"Text mismatch: Expected '{expected_text}', got '{element_text}'")
+                        continue
+                    logger.info(f"✓ Text verified: '{expected_text}' found in '{element_text}'")
+                else:
+                    logger.info(f"Element found: {element.tag_name}")
+
+                # Check if element is visible and enabled
+                if not element.is_displayed():
+                    logger.debug(f"Element not visible, skipping")
+                    continue
+
+                if not element.is_enabled():
+                    logger.debug(f"Element not enabled, skipping")
+                    continue
+
+                logger.info(f"✓ Element is visible and enabled")
 
                 # Scroll into view
                 self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
-                time.sleep(0.5)
+                time.sleep(0.8)
 
-                # Try to click
+                # Highlight element briefly for debugging
+                original_style = element.get_attribute('style')
+                self.driver.execute_script("arguments[0].setAttribute('style', arguments[1]);",
+                                         element, original_style + "border: 3px solid red;")
+                time.sleep(0.3)
+                self.driver.execute_script("arguments[0].setAttribute('style', arguments[1]);",
+                                         element, original_style)
+
+                # Try multiple click methods
+                click_success = False
+                click_method = "unknown"
+
+                # Method 1: Regular click
                 try:
                     element.click()
-                except:
-                    self.driver.execute_script("arguments[0].click();", element)
+                    click_success = True
+                    click_method = "element.click()"
+                    logger.info(f"✓ Clicked using: {click_method}")
+                except Exception as e1:
+                    logger.debug(f"Method 1 (element.click) failed: {str(e1)[:50]}")
 
-                logger.info(f"✓ {step_name}: Clicked using {selector_type} - {description[:50]}")
-                return True, f"✓ {step_name}: Successfully clicked ({selector_type})"
+                    # Method 2: JavaScript click
+                    try:
+                        self.driver.execute_script("arguments[0].click();", element)
+                        click_success = True
+                        click_method = "javascript click"
+                        logger.info(f"✓ Clicked using: {click_method}")
+                    except Exception as e2:
+                        logger.debug(f"Method 2 (JS click) failed: {str(e2)[:50]}")
+
+                        # Method 3: Action chains
+                        try:
+                            from selenium.webdriver.common.action_chains import ActionChains
+                            ActionChains(self.driver).move_to_element(element).click().perform()
+                            click_success = True
+                            click_method = "ActionChains"
+                            logger.info(f"✓ Clicked using: {click_method}")
+                        except Exception as e3:
+                            logger.debug(f"Method 3 (ActionChains) failed: {str(e3)[:50]}")
+
+                if click_success:
+                    success_msg = f"✓ {step_name}: SUCCESS using {selector_type} - {description[:40]}"
+                    logger.info(success_msg)
+                    logger.info(f"Click method: {click_method}")
+                    return True, f"{success_msg} (Method: {click_method})"
+                else:
+                    logger.debug(f"All click methods failed for this element")
+                    continue
 
             except Exception as e:
-                logger.debug(f"✗ {step_name}: {selector_type} '{description[:30]}...' failed - {str(e)[:50]}")
+                logger.debug(f"✗ {step_name}: {selector_type} '{description[:30]}...' failed - {str(e)[:100]}")
                 continue
 
-        return False, f"✗ {step_name}: All selectors failed"
+        logger.error(f"❌ {step_name}: All {len(selectors)} selectors failed!")
+        return False, f"✗ {step_name}: All selectors failed (tried {len(selectors)} methods)"
 
     def check_url_contains(self, expected_substring):
         """Check if current URL contains expected substring"""
@@ -194,31 +339,54 @@ class InstagramAutomation:
 
             # ==================== STEP 2 ====================
             await self.send_update("\n📍 STEP 2: Finding and clicking 'Log in with Instagram' button...")
+            await self.send_update("🔍 Searching for Instagram button (NOT Facebook)...")
+
+            # List all buttons for debugging
+            logger.info("=" * 60)
+            logger.info("LISTING ALL BUTTONS ON PAGE:")
+            self.list_clickable_elements(keyword="Instagram")
+            logger.info("=" * 60)
 
             ig_login_selectors = [
                 {
                     'type': 'xpath',
                     'selector': "//span[text()='Log in with Instagram']/ancestor::div[@role='button']",
-                    'desc': 'XPath - Exact text match with ancestor button'
+                    'desc': 'XPath - Exact Instagram text with ancestor button',
+                    'verify_text': 'Instagram'
                 },
                 {
                     'type': 'xpath',
-                    'selector': "//div[@role='button' and contains(., 'Log in with Instagram')]",
-                    'desc': 'XPath - Button role with Instagram text'
+                    'selector': "//div[@role='button'][.//span[contains(text(), 'Instagram')]]",
+                    'desc': 'XPath - Button containing Instagram span',
+                    'verify_text': 'Instagram'
                 },
                 {
                     'type': 'xpath',
-                    'selector': "//span[contains(@class, 'x1lliihq') and text()='Log in with Instagram']",
-                    'desc': 'XPath - Span with specific class'
+                    'selector': "//div[@role='button' and contains(., 'Log in with Instagram') and not(contains(., 'Facebook'))]",
+                    'desc': 'XPath - Button with Instagram text (excluding Facebook)',
+                    'verify_text': 'Instagram'
                 },
                 {
-                    'type': 'css',
-                    'selector': "span.x1lliihq.x193iq5w.x6ikm8r.x10wlt62.xlyipyv.xuxw1ft",
-                    'desc': 'CSS - Span with exact classes'
+                    'type': 'xpath',
+                    'selector': "//span[contains(@class, 'x1lliihq') and text()='Log in with Instagram']/parent::*",
+                    'desc': 'XPath - Span with Instagram text (parent element)',
+                    'verify_text': 'Instagram'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//*[contains(text(), 'Log in with Instagram')]",
+                    'desc': 'XPath - Any element with Instagram login text',
+                    'verify_text': 'Instagram'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//button[contains(., 'Instagram')]",
+                    'desc': 'XPath - Button element with Instagram',
+                    'verify_text': 'Instagram'
                 },
             ]
 
-            success, msg = self.try_find_and_click(ig_login_selectors, "STEP 2 - Instagram Login", timeout=15)
+            success, msg = self.try_find_and_click(ig_login_selectors, "STEP 2 - Instagram Login", timeout=15, verify_text='Instagram')
             await self.send_update(msg)
 
             if not success:
@@ -330,6 +498,12 @@ class InstagramAutomation:
             # ==================== STEP 5 ====================
             await self.send_update("\n📍 STEP 5: Finding and clicking 'Create ad' button...")
 
+            # List buttons for debugging
+            logger.info("=" * 60)
+            logger.info("STEP 5 - LISTING BUTTONS:")
+            self.list_clickable_elements(keyword="ad")
+            logger.info("=" * 60)
+
             create_ad_selectors = [
                 {
                     'type': 'xpath',
@@ -372,6 +546,13 @@ class InstagramAutomation:
             self.take_screenshot("step6_boosted_item_picker_page")
 
             await self.send_update("📍 STEP 6a: Clicking FIRST Continue button...")
+
+            # List buttons for debugging
+            logger.info("=" * 60)
+            logger.info("STEP 6a - LISTING BUTTONS:")
+            self.list_clickable_elements(keyword="Continue")
+            logger.info("=" * 60)
+
             continue_selectors = [
                 {
                     'type': 'xpath',

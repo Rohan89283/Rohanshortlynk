@@ -7,9 +7,15 @@ A Telegram bot that automates the process of connecting Instagram accounts to Fa
 - Automated Instagram to Facebook Business Manager connection
 - Real-time progress updates via Telegram
 - Screenshot capture at each step for debugging
-- Detailed logging for troubleshooting
+- **Smart button detection with text verification**
+- **Multiple selector strategies (XPath, CSS, role-based)**
+- **Iframe support for nested elements**
+- **Visual highlighting before clicking**
+- **3 different click methods (standard, JS, ActionChains)**
+- Detailed logging for troubleshooting with method tracking
 - Database logging for session tracking
 - Anti-detection measures using undetected-chromedriver
+- Fake user agents and anti-bot protection
 
 ## Commands
 
@@ -148,6 +154,19 @@ Tracks automation runs:
 - `error_message` - Error details if failed
 - `duration_seconds` - Total duration
 
+## Advanced Button Detection
+
+The bot uses **intelligent button detection** to ensure it clicks the RIGHT button:
+
+- **Text Verification**: Confirms button contains expected text (e.g., "Instagram" NOT "Facebook")
+- **Multiple Selectors**: Tries 6-8 different ways to find each button
+- **Iframe Support**: Automatically checks inside iframes if button not found in main page
+- **Visual Highlighting**: Highlights button with red border before clicking (visible in screenshots)
+- **Triple Click Methods**: Tries standard click, JavaScript click, and ActionChains
+- **Debug Logging**: Lists all buttons on page before searching, logs which method worked
+
+See `BUTTON_DETECTION.md` for complete technical details.
+
 ## Troubleshooting
 
 ### Bot not responding
@@ -156,9 +175,17 @@ Tracks automation runs:
 - Ensure bot is not stopped in BotFather
 
 ### Automation fails at specific step
-- Check screenshots sent by bot
-- Review logs for specific error messages
+- Check screenshots sent by bot (button will be highlighted in red)
+- Review Railway logs - they show which selectors were tried
+- Look for "LISTING BUTTONS" sections in logs to see what was available
 - Verify Instagram cookies are valid and not expired
+- Logs show exact selector and click method that worked/failed
+
+### Button not found errors
+- Bot automatically lists all buttons on page
+- Check logs for "Found X elements matching 'keyword'"
+- Button might be in iframe (bot checks automatically)
+- Screenshots show page state when button search happened
 
 ### Chrome crashes
 - This is handled by the Dockerfile with proper dependencies
