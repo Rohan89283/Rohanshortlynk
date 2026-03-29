@@ -590,7 +590,7 @@ class InstagramAutomation:
                 return False, self.screenshots
 
             await self.send_update("✓ STEP 5 SUCCESS: Clicked 'Create ad' button")
-            time.sleep(4)
+            time.sleep(5)
 
             self.take_screenshot("step5_SUCCESS_clicked_create_ad")
 
@@ -606,7 +606,7 @@ class InstagramAutomation:
                 await self.send_update(f"⚠️ Warning: Not on expected boosted_item_picker page")
                 await self.send_update(f"Current URL: {current_url[:100]}")
 
-            time.sleep(3)
+            time.sleep(4)
 
             # List all buttons for debugging
             logger.info("=" * 60)
@@ -617,8 +617,14 @@ class InstagramAutomation:
             continue_selectors_step6 = [
                 {
                     'type': 'xpath',
-                    'selector': "//div[@class='x1vvvo52 x1fvot60 xk50ysn xxio538 x1heor9g xuxw1ft x6ikm8r x10wlt62 xlyipyv x1h4wwuj xeuugli' and text()='Continue']",
-                    'desc': 'XPath - Exact div class with Continue text',
+                    'selector': "//div[@role='dialog']//div[text()='Continue']",
+                    'desc': 'XPath - Continue button inside dialog modal',
+                    'verify_text': 'Continue'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//div[contains(@aria-label, 'dialog') or contains(@role, 'dialog')]//div[text()='Continue']",
+                    'desc': 'XPath - Continue button inside aria-label dialog',
                     'verify_text': 'Continue'
                 },
                 {
@@ -629,20 +635,20 @@ class InstagramAutomation:
                 },
                 {
                     'type': 'xpath',
+                    'selector': "//*[@role='button' and contains(text(), 'Continue')]",
+                    'desc': 'XPath - Role button containing Continue',
+                    'verify_text': 'Continue'
+                },
+                {
+                    'type': 'xpath',
                     'selector': "//*[contains(text(), 'Continue')]",
                     'desc': 'XPath - Any element containing Continue',
                     'verify_text': 'Continue'
                 },
                 {
                     'type': 'xpath',
-                    'selector': "//div[contains(@class, 'x1vvvo52')]//div[text()='Continue']",
-                    'desc': 'XPath - Div with x1vvvo52 class containing Continue',
-                    'verify_text': 'Continue'
-                },
-                {
-                    'type': 'xpath',
-                    'selector': "//div[contains(@class, 'xeuugli') and text()='Continue']",
-                    'desc': 'XPath - Div with xeuugli class and Continue text',
+                    'selector': "//div[@class='x1vvvo52 x1fvot60 xk50ysn xxio538 x1heor9g xuxw1ft x6ikm8r x10wlt62 xlyipyv x1h4wwuj xeuugli' and text()='Continue']",
+                    'desc': 'XPath - Exact div class with Continue text (fallback)',
                     'verify_text': 'Continue'
                 },
             ]
@@ -673,20 +679,14 @@ class InstagramAutomation:
             continue_selectors_step7 = [
                 {
                     'type': 'xpath',
-                    'selector': "//div[@class='x6s0dn4 x78zum5 x1q0g3np xozqiw3 x2lwn1j xeuugli x1iyjqo2 x8va1my x1hc1fzr x13dflua x6o7n8i xxziih7 x12w9bfk xl56j7k xh8yej3']//div[@class='x1vvvo52 x1fvot60 xk50ysn xxio538 x1heor9g xuxw1ft x6ikm8r x10wlt62 xlyipyv x1h4wwuj xeuugli' and text()='Continue']",
-                    'desc': 'XPath - Exact nested div classes with Continue text',
+                    'selector': "//div[@role='dialog']//div[text()='Continue']",
+                    'desc': 'XPath - Continue button inside dialog modal',
                     'verify_text': 'Continue'
                 },
                 {
                     'type': 'xpath',
-                    'selector': "//div[contains(@class, 'x6s0dn4')]//div[text()='Continue']",
-                    'desc': 'XPath - Div with x6s0dn4 class containing Continue',
-                    'verify_text': 'Continue'
-                },
-                {
-                    'type': 'xpath',
-                    'selector': "//div[contains(@class, 'x78zum5')]//div[text()='Continue']",
-                    'desc': 'XPath - Div with x78zum5 class containing Continue',
+                    'selector': "//div[contains(@aria-label, 'dialog') or contains(@role, 'dialog')]//div[text()='Continue']",
+                    'desc': 'XPath - Continue button inside aria-label dialog',
                     'verify_text': 'Continue'
                 },
                 {
@@ -697,8 +697,20 @@ class InstagramAutomation:
                 },
                 {
                     'type': 'xpath',
+                    'selector': "//*[@role='button' and contains(text(), 'Continue')]",
+                    'desc': 'XPath - Role button containing Continue',
+                    'verify_text': 'Continue'
+                },
+                {
+                    'type': 'xpath',
                     'selector': "//*[contains(text(), 'Continue')]",
                     'desc': 'XPath - Any element containing Continue',
+                    'verify_text': 'Continue'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//div[@class='x6s0dn4 x78zum5 x1q0g3np xozqiw3 x2lwn1j xeuugli x1iyjqo2 x8va1my x1hc1fzr x13dflua x6o7n8i xxziih7 x12w9bfk xl56j7k xh8yej3']//div[@class='x1vvvo52 x1fvot60 xk50ysn xxio538 x1heor9g xuxw1ft x6ikm8r x10wlt62 xlyipyv x1h4wwuj xeuugli' and text()='Continue']",
+                    'desc': 'XPath - Exact nested div classes with Continue text (fallback)',
                     'verify_text': 'Continue'
                 },
             ]
