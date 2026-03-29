@@ -536,10 +536,291 @@ class InstagramAutomation:
                 self.take_screenshot("step4_FAILED_wrong_url")
                 return False, self.screenshots
 
+            self.take_screenshot("step4_SUCCESS_home_page")
+
+            # ==================== STEP 5 ====================
+            await self.send_update("\n📍 STEP 5: Finding and clicking 'Create ad' button...")
+            time.sleep(3)
+
+            # List all buttons for debugging
+            logger.info("=" * 60)
+            logger.info("STEP 5 - LISTING ALL BUTTONS:")
+            self.list_clickable_elements(keyword="Create")
+            logger.info("=" * 60)
+
+            create_ad_selectors = [
+                {
+                    'type': 'xpath',
+                    'selector': "//div[@class='x1vvvo52 x1fvot60 xk50ysn xxio538 x1heor9g xuxw1ft x6ikm8r x10wlt62 xlyipyv x1h4wwuj xeuugli' and text()='Create ad']",
+                    'desc': 'XPath - Exact div class with Create ad text',
+                    'verify_text': 'Create ad'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//div[text()='Create ad']",
+                    'desc': 'XPath - Any div with Create ad text',
+                    'verify_text': 'Create ad'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//*[contains(text(), 'Create ad')]",
+                    'desc': 'XPath - Any element containing Create ad',
+                    'verify_text': 'Create ad'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//div[contains(@class, 'x1vvvo52')]//div[text()='Create ad']",
+                    'desc': 'XPath - Div with x1vvvo52 class containing Create ad',
+                    'verify_text': 'Create ad'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//div[contains(@class, 'xeuugli') and text()='Create ad']",
+                    'desc': 'XPath - Div with xeuugli class and Create ad text',
+                    'verify_text': 'Create ad'
+                },
+            ]
+
+            success, msg = self.try_find_and_click(create_ad_selectors, "STEP 5 - Create ad", timeout=15, verify_text='Create ad', check_iframes=True)
+            await self.send_update(msg)
+
+            if not success:
+                await self.send_update("❌ STEP 5 FAILED: Could not find 'Create ad' button")
+                self.take_screenshot("step5_FAILED_no_create_ad")
+                return False, self.screenshots
+
+            await self.send_update("✓ STEP 5 SUCCESS: Clicked 'Create ad' button")
+            time.sleep(4)
+
+            self.take_screenshot("step5_SUCCESS_clicked_create_ad")
+
+            # ==================== STEP 6 ====================
+            await self.send_update("\n📍 STEP 6: Navigated to boosted item picker, clicking first 'Continue'...")
+
+            current_url = self.driver.current_url
+            logger.info(f"Step 6 URL: {current_url}")
+            await self.send_update(f"📊 Current URL: {current_url[:80]}...")
+
+            # Verify we're on boosted_item_picker page
+            if "boosted_item_picker" not in current_url:
+                await self.send_update(f"⚠️ Warning: Not on expected boosted_item_picker page")
+                await self.send_update(f"Current URL: {current_url[:100]}")
+
+            time.sleep(3)
+
+            # List all buttons for debugging
+            logger.info("=" * 60)
+            logger.info("STEP 6 - LISTING ALL BUTTONS:")
+            self.list_clickable_elements(keyword="Continue")
+            logger.info("=" * 60)
+
+            continue_selectors_step6 = [
+                {
+                    'type': 'xpath',
+                    'selector': "//div[@class='x1vvvo52 x1fvot60 xk50ysn xxio538 x1heor9g xuxw1ft x6ikm8r x10wlt62 xlyipyv x1h4wwuj xeuugli' and text()='Continue']",
+                    'desc': 'XPath - Exact div class with Continue text',
+                    'verify_text': 'Continue'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//div[text()='Continue']",
+                    'desc': 'XPath - Any div with Continue text',
+                    'verify_text': 'Continue'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//*[contains(text(), 'Continue')]",
+                    'desc': 'XPath - Any element containing Continue',
+                    'verify_text': 'Continue'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//div[contains(@class, 'x1vvvo52')]//div[text()='Continue']",
+                    'desc': 'XPath - Div with x1vvvo52 class containing Continue',
+                    'verify_text': 'Continue'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//div[contains(@class, 'xeuugli') and text()='Continue']",
+                    'desc': 'XPath - Div with xeuugli class and Continue text',
+                    'verify_text': 'Continue'
+                },
+            ]
+
+            success, msg = self.try_find_and_click(continue_selectors_step6, "STEP 6 - First Continue", timeout=15, verify_text='Continue', check_iframes=True)
+            await self.send_update(msg)
+
+            if not success:
+                await self.send_update("❌ STEP 6 FAILED: Could not find first 'Continue' button")
+                self.take_screenshot("step6_FAILED_no_continue")
+                return False, self.screenshots
+
+            await self.send_update("✓ STEP 6 SUCCESS: Clicked first 'Continue' button")
+            time.sleep(4)
+
+            self.take_screenshot("step6_SUCCESS_clicked_continue")
+
+            # ==================== STEP 7 ====================
+            await self.send_update("\n📍 STEP 7: Popup appeared, clicking second 'Continue' button...")
+            time.sleep(3)
+
+            # List all buttons for debugging
+            logger.info("=" * 60)
+            logger.info("STEP 7 - LISTING ALL BUTTONS:")
+            self.list_clickable_elements(keyword="Continue")
+            logger.info("=" * 60)
+
+            continue_selectors_step7 = [
+                {
+                    'type': 'xpath',
+                    'selector': "//div[@class='x6s0dn4 x78zum5 x1q0g3np xozqiw3 x2lwn1j xeuugli x1iyjqo2 x8va1my x1hc1fzr x13dflua x6o7n8i xxziih7 x12w9bfk xl56j7k xh8yej3']//div[@class='x1vvvo52 x1fvot60 xk50ysn xxio538 x1heor9g xuxw1ft x6ikm8r x10wlt62 xlyipyv x1h4wwuj xeuugli' and text()='Continue']",
+                    'desc': 'XPath - Exact nested div classes with Continue text',
+                    'verify_text': 'Continue'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//div[contains(@class, 'x6s0dn4')]//div[text()='Continue']",
+                    'desc': 'XPath - Div with x6s0dn4 class containing Continue',
+                    'verify_text': 'Continue'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//div[contains(@class, 'x78zum5')]//div[text()='Continue']",
+                    'desc': 'XPath - Div with x78zum5 class containing Continue',
+                    'verify_text': 'Continue'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//div[text()='Continue']",
+                    'desc': 'XPath - Any div with Continue text',
+                    'verify_text': 'Continue'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//*[contains(text(), 'Continue')]",
+                    'desc': 'XPath - Any element containing Continue',
+                    'verify_text': 'Continue'
+                },
+            ]
+
+            success, msg = self.try_find_and_click(continue_selectors_step7, "STEP 7 - Second Continue (Popup)", timeout=15, verify_text='Continue', check_iframes=True)
+            await self.send_update(msg)
+
+            if not success:
+                await self.send_update("❌ STEP 7 FAILED: Could not find second 'Continue' button in popup")
+                self.take_screenshot("step7_FAILED_no_popup_continue")
+                return False, self.screenshots
+
+            await self.send_update("✓ STEP 7 SUCCESS: Clicked second 'Continue' button in popup")
+            time.sleep(5)
+
+            self.take_screenshot("step7_SUCCESS_clicked_popup_continue")
+
+            # ==================== STEP 8 ====================
+            await self.send_update("\n📍 STEP 8: New tab opened for authorization, clicking 'Continue as' button...")
+            time.sleep(3)
+
+            # Check if new window/tab opened
+            if len(self.driver.window_handles) > 1:
+                await self.send_update(f"✓ Detected {len(self.driver.window_handles)} windows, switching to new tab...")
+                self.driver.switch_to.window(self.driver.window_handles[-1])
+                await self.send_update("✓ Switched to authorization tab")
+                time.sleep(3)
+
+            current_url = self.driver.current_url
+            logger.info(f"Step 8 URL: {current_url}")
+            await self.send_update(f"📊 Current URL: {current_url[:80]}...")
+
+            # Verify we're on OIDC authorization page
+            if "oidc" not in current_url:
+                await self.send_update(f"⚠️ Warning: Not on expected OIDC authorization page")
+                await self.send_update(f"Current URL: {current_url[:100]}")
+
+            # List all buttons for debugging
+            logger.info("=" * 60)
+            logger.info("STEP 8 - LISTING ALL BUTTONS:")
+            self.list_clickable_elements(keyword="Continue")
+            logger.info("=" * 60)
+
+            continue_as_selectors = [
+                {
+                    'type': 'xpath',
+                    'selector': "//button[@class='_42ft _4jy0 layerConfirm _1-af _4jy6 _4jy1 selected _51sy' and @name='__CONFIRM__' and @type='submit' and starts-with(text(), 'Continue as')]",
+                    'desc': 'XPath - Exact button class with Continue as text',
+                    'verify_text': 'Continue as'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//button[@name='__CONFIRM__' and @type='submit' and contains(text(), 'Continue as')]",
+                    'desc': 'XPath - Button with __CONFIRM__ name and Continue as text',
+                    'verify_text': 'Continue as'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//button[@type='submit' and contains(text(), 'Continue as')]",
+                    'desc': 'XPath - Submit button with Continue as text',
+                    'verify_text': 'Continue as'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//button[contains(@class, 'layerConfirm') and contains(text(), 'Continue as')]",
+                    'desc': 'XPath - Button with layerConfirm class',
+                    'verify_text': 'Continue as'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//button[contains(text(), 'Continue as')]",
+                    'desc': 'XPath - Any button containing Continue as',
+                    'verify_text': 'Continue as'
+                },
+                {
+                    'type': 'css',
+                    'selector': "button._42ft._4jy0.layerConfirm[name='__CONFIRM__']",
+                    'desc': 'CSS - Button with exact classes and __CONFIRM__ name',
+                    'verify_text': 'Continue as'
+                },
+            ]
+
+            success, msg = self.try_find_and_click(continue_as_selectors, "STEP 8 - Continue as", timeout=15, verify_text='Continue as', check_iframes=True)
+            await self.send_update(msg)
+
+            if not success:
+                await self.send_update("❌ STEP 8 FAILED: Could not find 'Continue as' button")
+                self.take_screenshot("step8_FAILED_no_continue_as")
+                return False, self.screenshots
+
+            await self.send_update("✓ STEP 8 SUCCESS: Clicked 'Continue as' button")
+            time.sleep(5)
+
+            self.take_screenshot("step8_SUCCESS_clicked_continue_as")
+
+            # Wait for redirect and switch back to main tab
+            await self.send_update("🔄 Waiting for authorization to complete...")
+            time.sleep(5)
+
+            # Check URL after authorization
+            current_url = self.driver.current_url
+            logger.info(f"After authorization URL: {current_url}")
+
+            # Close new tab if still open and switch to main tab
+            if len(self.driver.window_handles) > 1:
+                await self.send_update("🔄 Closing authorization tab and switching to main window...")
+                self.driver.close()
+                self.driver.switch_to.window(self.driver.window_handles[0])
+                await self.send_update("✓ Switched back to main window")
+                time.sleep(3)
+
+            current_url = self.driver.current_url
+            logger.info(f"Main window URL: {current_url}")
+            await self.send_update(f"📊 Main window URL: {current_url[:80]}...")
+
+            self.take_screenshot("step8_SUCCESS_back_to_main")
+
             # ==================== FINAL ====================
-            await self.send_update("\n✅ ALL STEPS COMPLETED SUCCESSFULLY!")
-            await self.send_update("✅ Instagram account connected to Facebook Business Manager")
-            await self.send_update(f"✅ Business URL: {current_url}")
+            await self.send_update("\n✅ ALL 8 STEPS COMPLETED SUCCESSFULLY!")
+            await self.send_update("✅ Instagram account fully connected to Facebook Business Manager")
+            await self.send_update("✅ Authorization completed successfully")
+            await self.send_update(f"✅ Final URL: {current_url[:100]}")
             await self.send_update(f"\n📊 Total screenshots captured: {len(self.screenshots)}")
 
             if len(self.screenshots) > 0:
