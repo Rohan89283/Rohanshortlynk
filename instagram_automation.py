@@ -555,7 +555,6 @@ class InstagramAutomation:
                 if "business.facebook.com" in current_url:
                     await self.send_update("✓ STEP 3 SUCCESS: Popup auto-closed (no button click needed)")
                     logger.info("Popup auto-closed - OAuth completed automatically")
-                    self.take_screenshot("step3_SUCCESS_auto_closed")
                     # Already on main window, continue to Step 4
 
                 # Verify we're on Instagram OAuth page
@@ -613,7 +612,6 @@ class InstagramAutomation:
                             await self.send_update("✓ STEP 3 SUCCESS: Popup auto-closed during search (no button click needed)")
                             logger.info("Popup auto-closed while searching for button")
                             self.driver.switch_to.window(self.driver.window_handles[0])
-                            self.take_screenshot("step3_SUCCESS_auto_closed_during_search")
                         else:
                             await self.send_update("❌ STEP 3 FAILED: Could not find 'Log in as' button and popup still open")
                             self.take_screenshot("step3_FAILED_no_login_as_button")
@@ -628,7 +626,6 @@ class InstagramAutomation:
                         # The popup closes automatically, switch to the first (main) window
                         self.driver.switch_to.window(self.driver.window_handles[0])
                         logger.info("✓ Switched back to main window after clicking 'Log in as'")
-                        self.take_screenshot("step3_SUCCESS_clicked_login_as")
 
                 else:
                     await self.send_update("❌ STEP 3 FAILED: Unexpected URL in popup")
@@ -641,7 +638,6 @@ class InstagramAutomation:
                 if "business.facebook.com" in current_url:
                     await self.send_update("✓ STEP 3 SUCCESS: No popup needed - already authenticated")
                     logger.info("No OAuth popup opened - user already authenticated")
-                    self.take_screenshot("step3_SUCCESS_no_popup_needed")
                 else:
                     await self.send_update("❌ STEP 3 FAILED: No popup opened and not on expected page")
                     await self.send_update(f"URL: {current_url[:100]}")
@@ -690,8 +686,6 @@ class InstagramAutomation:
                 self.take_screenshot("step4_FAILED_wrong_url")
                 return False, self.screenshots
 
-            self.take_screenshot("step4_SUCCESS_home_page")
-
             # ==================== STEP 5 ====================
             await self.send_update("\n📍 STEP 5: Navigating to Facebook Ads Center...")
             time.sleep(2)
@@ -712,8 +706,6 @@ class InstagramAutomation:
                         _ = self.driver.title
                     except Exception as e:
                         logger.warning(f"Session check {i+1}/4 during page load: {e}")
-
-                self.take_screenshot("step5_navigated_to_ads_center")
 
                 # Check if driver session is still valid
                 current_url = self.driver.current_url
@@ -781,8 +773,6 @@ class InstagramAutomation:
 
             await self.send_update("✓ STEP 5 SUCCESS: Clicked 'Get started' button")
             time.sleep(5)
-
-            self.take_screenshot("step5_SUCCESS_clicked_get_started")
 
             # ==================== STEP 6 ====================
             await self.send_update("\n📍 STEP 6: Navigated to boosted item picker, clicking first 'Continue'...")
@@ -854,8 +844,6 @@ class InstagramAutomation:
             await self.send_update("✓ STEP 6 SUCCESS: Clicked first 'Continue' button")
             time.sleep(4)
 
-            self.take_screenshot("step6_SUCCESS_clicked_continue")
-
             # ==================== STEP 7 ====================
             await self.send_update("\n📍 STEP 7: Popup appeared, clicking second 'Continue' button...")
             time.sleep(3)
@@ -915,8 +903,6 @@ class InstagramAutomation:
 
             await self.send_update("✓ STEP 7 SUCCESS: Clicked second 'Continue' button in popup")
             time.sleep(5)
-
-            self.take_screenshot("step7_SUCCESS_clicked_popup_continue")
 
             # ==================== STEP 8 ====================
             await self.send_update("\n📍 STEP 8: New tab opened for authorization, clicking 'Continue as' button...")
@@ -994,8 +980,6 @@ class InstagramAutomation:
             await self.send_update("✓ STEP 8 SUCCESS: Clicked 'Continue as' button")
             time.sleep(5)
 
-            self.take_screenshot("step8_SUCCESS_clicked_continue_as")
-
             # Wait for redirect and switch back to main tab
             await self.send_update("🔄 Waiting for authorization to complete...")
             time.sleep(5)
@@ -1015,8 +999,6 @@ class InstagramAutomation:
             current_url = self.driver.current_url
             logger.info(f"Main window URL: {current_url}")
             await self.send_update(f"📊 Main window URL: {current_url[:80]}...")
-
-            self.take_screenshot("step8_SUCCESS_back_to_main")
 
             # ==================== FINAL ====================
             await self.send_update("\n✅ ALL 8 STEPS COMPLETED SUCCESSFULLY!")
