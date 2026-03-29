@@ -18,73 +18,113 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_message = """
 🤖 Welcome to Instagram Business Automation Bot!
 
-This bot helps you automate Instagram Business Manager setup.
+This bot automates connecting your Instagram account to Facebook Business Manager for running ads.
 
 📋 Available Commands:
 /start - Show this welcome message
-/help - Show detailed help information
-/cmds - List all available commands
-/ig <cookie> - Start Instagram automation with your cookie
+/help - Detailed help and instructions
+/ig <cookie> - Start automation (paste your Instagram cookie)
 
-⚠️ Important: Make sure you have your Instagram cookie ready before using /ig command.
+⚠️ Quick Start:
+1. Get your Instagram cookie (see /help for instructions)
+2. Use: /ig sessionid=xxx; ds_user_id=yyy; csrftoken=zzz
+3. Watch the automation happen with live updates
+4. Receive screenshots at each step
+
+Type /help for detailed instructions on getting your cookie.
     """
     await update.message.reply_text(welcome_message)
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Help command"""
     help_message = """
-📚 Detailed Help Information
+📚 HOW TO GET INSTAGRAM COOKIES
 
-🔹 /ig Command Usage:
-Format: /ig <your_instagram_cookie>
+1️⃣ Open Instagram in Chrome/Firefox
+   - Go to instagram.com and log in
 
-Example: /ig sessionid=abc123xyz; ds_user_id=456789; csrftoken=token123
+2️⃣ Open Developer Tools
+   - Press F12 (or right-click > Inspect)
 
-What the bot does:
-1. Opens Facebook Business login page
-2. Clicks "Log in with Instagram"
-3. Uses your cookie to log into Instagram
-4. Navigates through Business Manager setup
-5. Links your Instagram account to Facebook ad account
-6. Completes the ad account connection process
+3️⃣ Go to Application/Storage Tab
+   - Click "Application" (Chrome) or "Storage" (Firefox)
+   - Expand "Cookies" on the left
+   - Click on "https://www.instagram.com"
 
-📸 You'll receive:
-- Live updates for each step
-- Screenshots of the process
-- Error messages if something fails
-- Final confirmation when complete
+4️⃣ Copy These Cookie Values:
+   - sessionid
+   - ds_user_id
+   - csrftoken
 
-⚠️ Requirements:
-- Valid Instagram cookie string
-- Instagram account must be business/creator account
-- Stable internet connection
+5️⃣ Format Your Cookie String:
+   sessionid=VALUE1; ds_user_id=VALUE2; csrftoken=VALUE3
 
-🔐 Privacy:
-- Your cookies are used only for automation
-- No data is stored permanently
-- Session ends after process completes
+6️⃣ Use The Command:
+   /ig sessionid=abc123; ds_user_id=456789; csrftoken=xyz789
 
-Need support? Contact the bot administrator.
+━━━━━━━━━━━━━━━━━━━━
+
+📸 WHAT HAPPENS NEXT:
+
+Step 1: Bot opens Facebook Business login
+Step 2: Clicks "Log in with Instagram"
+Step 3: Uses your cookies to authenticate
+Step 4: Navigates to Business Manager home
+Step 5: Clicks "Create ad" button
+Step 6: Processes boosted item picker
+Step 7: Authorizes Facebook connection
+Step 8: Completes final setup steps
+
+You'll get:
+✓ Live updates for each step
+✓ Screenshots at every stage
+✓ Success/error notifications
+✓ Detailed logs for debugging
+
+━━━━━━━━━━━━━━━━━━━━
+
+⚠️ IMPORTANT NOTES:
+
+- Cookies expire after a while (get fresh ones if automation fails)
+- Keep your cookies private (never share with others)
+- Use at your own risk (automation may violate ToS)
+- Bot runs in headless mode (you won't see browser)
+- Process takes 2-5 minutes depending on connection
+
+Need help? Check the screenshots if something fails!
     """
     await update.message.reply_text(help_message)
 
 async def cmds_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Commands list"""
     cmds_message = """
-📋 Available Commands:
+📋 AVAILABLE COMMANDS
 
-/start - Welcome message and quick start guide
-/help - Detailed help and usage instructions
-/cmds - Show all available commands (this message)
-/ig <cookie> - Start Instagram automation process
+/start
+  → Welcome message and quick overview
 
-💡 Quick Start:
-1. Use /start to see the welcome message
-2. Get your Instagram cookie
-3. Run /ig with your cookie to start automation
-4. Monitor progress and receive screenshots
+/help
+  → Detailed guide on getting Instagram cookies
+  → Step-by-step automation process explanation
 
-For detailed instructions, use /help
+/ig <cookie>
+  → Start the automation process
+  → Example: /ig sessionid=xxx; ds_user_id=yyy; csrftoken=zzz
+
+━━━━━━━━━━━━━━━━━━━━
+
+💡 WORKFLOW:
+
+1. Type /help to learn how to get cookies
+2. Copy your Instagram cookies from browser
+3. Use /ig command with your cookies
+4. Watch the magic happen!
+5. Get screenshots of every step
+
+━━━━━━━━━━━━━━━━━━━━
+
+Need help getting cookies? → /help
+Ready to start? → /ig <your_cookie>
     """
     await update.message.reply_text(cmds_message)
 
