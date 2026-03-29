@@ -23,6 +23,7 @@ This bot helps you automate Instagram Business Manager setup.
 📋 Available Commands:
 /start - Show this welcome message
 /help - Show detailed help information
+/cmds - List all available commands
 /ig <cookie> - Start Instagram automation with your cookie
 
 ⚠️ Important: Make sure you have your Instagram cookie ready before using /ig command.
@@ -66,6 +67,26 @@ What the bot does:
 Need support? Contact the bot administrator.
     """
     await update.message.reply_text(help_message)
+
+async def cmds_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commands list"""
+    cmds_message = """
+📋 Available Commands:
+
+/start - Welcome message and quick start guide
+/help - Detailed help and usage instructions
+/cmds - Show all available commands (this message)
+/ig <cookie> - Start Instagram automation process
+
+💡 Quick Start:
+1. Use /start to see the welcome message
+2. Get your Instagram cookie
+3. Run /ig with your cookie to start automation
+4. Monitor progress and receive screenshots
+
+For detailed instructions, use /help
+    """
+    await update.message.reply_text(cmds_message)
 
 async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /ig command with Instagram cookie"""
@@ -158,6 +179,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("cmds", cmds_command))
     app.add_handler(CommandHandler("ig", ig_command))
 
     logger.info("Bot started successfully!")
