@@ -66,7 +66,7 @@ class InstagramAutomation:
             options.add_argument('--disable-backgrounding-occluded-windows')
             options.add_argument('--disable-breakpad')
             options.add_argument('--disable-component-extensions-with-background-pages')
-            options.add_argument('--disable-features=TranslateUI,BlinkGenPropertyTrees')
+            options.add_argument('--disable-features=TranslateUI,BlinkGenPropertyTrees,VizDisplayCompositor')
             options.add_argument('--disable-ipc-flooding-protection')
             options.add_argument('--disable-renderer-backgrounding')
             options.add_argument('--enable-features=NetworkService,NetworkServiceInProcess')
@@ -75,16 +75,30 @@ class InstagramAutomation:
             options.add_argument('--metrics-recording-only')
             options.add_argument('--mute-audio')
 
+            # Force English language at browser level
+            options.add_argument('--lang=en-US')
+            options.add_argument('--accept-lang=en-US,en')
+            options.add_experimental_option('prefs', {
+                'intl.accept_languages': 'en-US,en',
+                'profile.default_content_setting_values.notifications': 2
+            })
+
             ua = UserAgent()
             user_agent = ua.random
             options.add_argument(f'user-agent={user_agent}')
 
             self.driver = uc.Chrome(options=options, version_main=int(chrome_version), use_subprocess=False)
 
-            # Anti-detection scripts
+            # Anti-detection scripts and language override
             self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             self.driver.execute_cdp_cmd('Network.setUserAgentOverride', {"userAgent": user_agent})
             self.driver.execute_script("Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]})")
+
+            # Force English language in JavaScript
+            self.driver.execute_script("""
+                Object.defineProperty(navigator, 'language', {get: () => 'en-US'});
+                Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+            """)
 
             logger.info(f"✓ Chrome driver initialized with user agent: {user_agent[:50]}...")
             return True
@@ -629,7 +643,7 @@ class InstagramAutomation:
             await self.send_update("\n📍 STEP 5: Navigating to Facebook Ads Center...")
             time.sleep(2)
 
-            # Force Facebook to English by setting locale cookie
+            # Force Facebook to English by setting multiple language cookies
             logger.info("🌍 Forcing Facebook Business to English language...")
             await self.send_update("🌍 Setting Facebook to English...")
 
@@ -638,33 +652,60 @@ class InstagramAutomation:
                 self.driver.get("https://business.facebook.com")
                 time.sleep(2)
 
-                # Set locale cookie to English (United States)
-                self.driver.add_cookie({
-                    'name': 'locale',
-                    'value': 'en_US',
-                    'domain': '.facebook.com',
-                    'path': '/'
-                })
+                # Set multiple locale cookies to English (United States)
+                language_cookies = [
+                    {'name': 'locale', 'value': 'en_US', 'domain': '.facebook.com', 'path': '/'},
+                    {'name': 'locale', 'value': 'en_US', 'domain': '.business.facebook.com', 'path': '/'},
+                    {'name': 'i18n_language', 'value': 'en_US', 'domain': '.facebook.com', 'path': '/'},
+                    {'name': 'lang', 'value': 'en', 'domain': '.facebook.com', 'path': '/'},
+                ]
+
+                for cookie in language_cookies:
+                    try:
+                        self.driver.add_cookie(cookie)
+                        logger.info(f"✓ Set {cookie['name']} cookie")
+                    except Exception as cookie_error:
+                        logger.warning(f"Could not set {cookie['name']} cookie: {cookie_error}")
 
                 logger.info("✓ Facebook language set to English (en_US)")
                 await self.send_update("✓ Facebook language configured")
             except Exception as e:
-                logger.warning(f"Could not set Facebook locale cookie: {e}")
+                logger.warning(f"Could not set Facebook locale cookies: {e}")
                 # Continue anyway as the URL may still work
 
-            # Navigate to Facebook Ads Center with locale parameter
-            ads_center_url = "https://business.facebook.com/latest/ad_center/ads_summary?locale=en_US"
+            # Navigate to Facebook Ads Center - simplified URL
+            ads_center_url = "https://business.facebook.com/latest/ad_center/"
             logger.info(f"Navigating to: {ads_center_url}")
             await self.send_update(f"🌐 Going to: {ads_center_url}")
 
-            self.driver.get(ads_center_url)
-            time.sleep(5)
+            try:
+                self.driver.get(ads_center_url)
+                time.sleep(8)
 
-            self.take_screenshot("step5_navigated_to_ads_center")
+                # Force English language via JavaScript after page load
+                try:
+                    self.driver.execute_script("""
+                        document.documentElement.lang = 'en';
+                        if (window.localStorage) {
+                            localStorage.setItem('locale', 'en_US');
+                            localStorage.setItem('i18n_language', 'en_US');
+                        }
+                    """)
+                    logger.info("✓ JavaScript language override applied")
+                except Exception as js_error:
+                    logger.warning(f"Could not apply JavaScript language override: {js_error}")
 
-            current_url = self.driver.current_url
-            logger.info(f"Step 5 URL after navigation: {current_url}")
-            await self.send_update(f"📊 Current URL: {current_url[:80]}...")
+                self.take_screenshot("step5_navigated_to_ads_center")
+
+                # Check if driver session is still valid
+                current_url = self.driver.current_url
+                logger.info(f"Step 5 URL after navigation: {current_url}")
+                await self.send_update(f"📊 Current URL: {current_url[:80]}...")
+            except Exception as nav_error:
+                logger.error(f"❌ Navigation to Ads Center failed: {nav_error}")
+                await self.send_update(f"❌ Failed to load Ads Center page")
+                self.take_screenshot("step5_FAILED_navigation_crash")
+                return False, self.screenshots
 
             # Wait for page to load
             await self.send_update("⏳ Waiting for Ads Center page to load...")
