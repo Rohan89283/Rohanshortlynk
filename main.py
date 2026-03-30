@@ -3,6 +3,7 @@ import logging
 import asyncio
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.request import HTTPXRequest
 from instagram_automation import InstagramAutomation
 
 logging.basicConfig(
@@ -141,25 +142,50 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cookie = ' '.join(context.args)
     logger.info(f"User {update.effective_user.id} started automation")
 
-    # Send initial message
-    status_message = await update.message.reply_text(
-        "🚀 Starting automation process...\n"
-        "Please wait, this may take a few minutes.\n\n"
-        "You will receive live updates below."
-    )
+    # Send initial message with retry logic
+    status_message = None
+    for attempt in range(3):
+        try:
+            status_message = await update.message.reply_text(
+                "🚀 Starting automation process...\n"
+                "Please wait, this may take a few minutes.\n\n"
+                "You will receive live updates below.",
+                read_timeout=30,
+                write_timeout=30,
+                connect_timeout=30,
+                pool_timeout=30
+            )
+            break
+        except Exception as e:
+            logger.warning(f"Failed to send initial message (attempt {attempt + 1}/3): {e}")
+            if attempt == 2:
+                # If all retries fail, send a simple message without waiting
+                try:
+                    await update.message.reply_text("�� Starting automation...")
+                except:
+                    pass
+                # Continue without status updates
+                status_message = None
+            await asyncio.sleep(1)
 
     updates_text = []
 
     async def update_callback(message):
         """Callback to send updates to user"""
+        if status_message is None:
+            return  # Skip updates if initial message failed
+
         updates_text.append(message)
         full_text = '\n'.join(updates_text[-20:])  # Keep last 20 updates
         try:
             await status_message.edit_text(
-                f"🔄 Automation in Progress...\n\n{full_text}"
+                f"🔄 Automation in Progress...\n\n{full_text}",
+                read_timeout=20,
+                write_timeout=20
             )
-        except:
-            pass  # Ignore if message hasn't changed
+        except Exception as e:
+            logger.debug(f"Could not update message: {e}")
+            pass  # Ignore if message hasn't changed or timeout
 
     # Run automation
     automation = InstagramAutomation(cookie, update_callback)
@@ -187,7 +213,9 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 screenshot['image'].seek(0)
                 await update.message.reply_photo(
                     photo=screenshot['image'],
-                    caption=f"Screenshot {idx}/{len(screenshots)}: {screenshot['name']}"
+                    caption=f"Screenshot {idx}/{len(screenshots)}: {screenshot['name']}",
+                    read_timeout=60,
+                    write_timeout=60
                 )
                 await asyncio.sleep(0.5)  # Avoid rate limiting
             except Exception as e:
@@ -215,7 +243,21 @@ def main():
         logger.error("BOT_TOKEN not set!")
         return
 
-    app = Application.builder().token(BOT_TOKEN).build()
+    # Create custom request with longer timeouts
+    request = HTTPXRequest(
+        connection_pool_size=8,
+        read_timeout=60.0,
+        write_timeout=60.0,
+        connect_timeout=30.0,
+        pool_timeout=30.0
+    )
+
+    app = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .request(request)
+        .build()
+    )
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
