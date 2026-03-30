@@ -1004,6 +1004,10 @@ class InstagramAutomation:
             await self.send_update("\n📍 STEP 9: Back on main window, clicking third 'Continue' button...")
             time.sleep(3)
 
+            # Take screenshot before clicking
+            await self.send_update("📸 Taking screenshot before Step 9...")
+            self.take_screenshot("step9_before_continue")
+
             # List all buttons for debugging
             logger.info("=" * 60)
             logger.info("STEP 9 - LISTING ALL BUTTONS:")
