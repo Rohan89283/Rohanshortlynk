@@ -1044,39 +1044,98 @@ class InstagramAutomation:
                 return False, self.screenshots
 
             await self.send_update("✓ STEP 9 SUCCESS: Clicked third 'Continue' button")
-            time.sleep(3)
-
-            # Check if new tab opened and auto-closes
-            await self.send_update("⏳ Waiting for final authorization tab to open and close...")
             time.sleep(5)
 
-            # If a new tab opened, it should close automatically
+            # ==================== STEP 10 ====================
+            await self.send_update("\n📍 STEP 10: Clicking 'Connect a Meta ad account' Continue button...")
+            time.sleep(3)
+
+            # Take screenshot before Step 10
+            await self.send_update("📸 Taking screenshot before Step 10...")
+            self.take_screenshot("step10_before_meta_ad_continue")
+
+            # List all buttons for debugging
+            logger.info("=" * 60)
+            logger.info("STEP 10 - LISTING ALL BUTTONS:")
+            self.list_clickable_elements(keyword="Continue")
+            logger.info("=" * 60)
+
+            continue_selectors_step10 = [
+                {
+                    'type': 'xpath',
+                    'selector': "//div[@role='dialog']//div[@role='button' and text()='Continue']",
+                    'desc': 'XPath - Continue button inside dialog',
+                    'verify_text': 'Continue'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//button[text()='Continue']",
+                    'desc': 'XPath - Button with Continue text',
+                    'verify_text': 'Continue'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//div[@role='button' and contains(text(), 'Continue')]",
+                    'desc': 'XPath - Div role button containing Continue',
+                    'verify_text': 'Continue'
+                },
+                {
+                    'type': 'css',
+                    'selector': 'div[role="button"]',
+                    'desc': 'CSS - All div role buttons (will verify text)',
+                    'verify_text': 'Continue'
+                },
+            ]
+
+            success, msg = self.try_find_and_click(continue_selectors_step10, "STEP 10 - Meta Ad Continue", timeout=15, verify_text='Continue', check_iframes=False)
+            await self.send_update(msg)
+
+            if not success:
+                await self.send_update("❌ STEP 10 FAILED: Could not find 'Connect Meta ad account' Continue button")
+                self.take_screenshot("step10_FAILED_no_continue")
+                return False, self.screenshots
+
+            await self.send_update("✓ STEP 10 SUCCESS: Clicked Meta ad account Continue button")
+            time.sleep(5)
+
+            # Check if new tab opened (Instagram login)
             if len(self.driver.window_handles) > 1:
-                await self.send_update("✓ New tab detected, waiting for auto-close...")
-                # Wait for tab to close
-                for i in range(10):
+                await self.send_update("🔄 New Instagram login tab detected...")
+                await self.send_update("⏳ Waiting for Instagram authorization...")
+
+                # Wait for the new tab to complete authorization and auto-close
+                for i in range(15):
                     time.sleep(1)
                     if len(self.driver.window_handles) == 1:
-                        await self.send_update("✓ Tab auto-closed successfully")
+                        await self.send_update("✓ Instagram authorization completed, tab auto-closed")
                         break
                 else:
-                    # If tab didn't close after 10 seconds, close it manually
-                    await self.send_update("⚠️ Tab didn't auto-close, closing manually...")
+                    # If tab didn't close after 15 seconds, check if manual close needed
+                    await self.send_update("⚠️ Tab still open after 15 seconds, checking status...")
                     if len(self.driver.window_handles) > 1:
                         self.driver.switch_to.window(self.driver.window_handles[-1])
+                        current_tab_url = self.driver.current_url
+                        logger.info(f"New tab URL: {current_tab_url}")
+                        await self.send_update(f"📊 New tab URL: {current_tab_url[:80]}...")
                         self.driver.close()
                         self.driver.switch_to.window(self.driver.window_handles[0])
+                        await self.send_update("✓ Closed tab and returned to main window")
             else:
                 await self.send_update("✓ No new tab opened or already closed")
 
+            # Switch back to main window
+            self.driver.switch_to.window(self.driver.window_handles[0])
+            time.sleep(3)
+
             # Get final URL
             current_url = self.driver.current_url
-            logger.info(f"Final URL after Step 9: {current_url}")
+            logger.info(f"Final URL after Step 10: {current_url}")
             await self.send_update(f"📊 Final URL: {current_url[:100]}...")
 
             # ==================== FINAL ====================
-            await self.send_update("\n✅ ALL 9 STEPS COMPLETED SUCCESSFULLY!")
+            await self.send_update("\n✅ ALL 10 STEPS COMPLETED SUCCESSFULLY!")
             await self.send_update("✅ Instagram account fully connected to Facebook Business Manager")
+            await self.send_update("✅ Meta ad account connected successfully")
             await self.send_update("✅ Full authorization flow completed successfully")
             await self.send_update(f"✅ Final URL: {current_url[:100]}")
 
@@ -1090,7 +1149,7 @@ class InstagramAutomation:
                 await self.send_update("📸 Sending screenshots for review...")
 
             logger.info("=" * 60)
-            logger.info("AUTOMATION COMPLETED SUCCESSFULLY!")
+            logger.info("AUTOMATION COMPLETED SUCCESSFULLY - ALL 10 STEPS!")
             logger.info(f"Final URL: {current_url}")
             logger.info(f"Screenshots: {len(self.screenshots)}")
             logger.info("=" * 60)
