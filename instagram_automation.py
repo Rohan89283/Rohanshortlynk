@@ -1075,6 +1075,11 @@ class InstagramAutomation:
             await self.send_update("✅ Instagram account fully connected to Facebook Business Manager")
             await self.send_update("✅ Full authorization flow completed successfully")
             await self.send_update(f"✅ Final URL: {current_url[:100]}")
+
+            # Take final screenshot
+            await self.send_update("📸 Taking final screenshot...")
+            self.take_screenshot("FINAL_success_page")
+
             await self.send_update(f"\n📊 Total screenshots captured: {len(self.screenshots)}")
 
             if len(self.screenshots) > 0:
