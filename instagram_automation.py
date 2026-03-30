@@ -538,11 +538,11 @@ class InstagramAutomation:
                     logger.warning(f"Session check {i+1}/3 after Step 2: {e}")
 
             # ==================== STEP 3 ====================
-            await self.send_update("\n📍 STEP 3: Looking for Instagram OAuth popup/tab...")
-            await self.send_update("⏳ Waiting for Instagram OAuth popup to open...")
+            await self.send_update("\n📍 STEP 3: Looking for Instagram OAuth page...")
+            await self.send_update("⏳ Waiting for Instagram OAuth page to load...")
 
-            # Wait for popup to open
-            time.sleep(3)
+            # Wait for page/popup to load
+            time.sleep(4)
 
             # Check if new window/tab opened
             try:
@@ -554,103 +554,126 @@ class InstagramAutomation:
                 self.take_screenshot("step3_FAILED_session_lost")
                 return False, self.screenshots
 
+            # Check if OAuth page opened in new tab/popup OR same window
             if window_count > 1:
-                # New popup/tab opened - switch to it
+                # Scenario 1: New popup/tab opened - switch to it
                 await self.send_update(f"✓ New popup/tab detected (total windows: {window_count})")
                 self.driver.switch_to.window(self.driver.window_handles[-1])
                 await self.send_update("✓ Switched to Instagram OAuth popup/tab")
-                time.sleep(3)
-
-                current_url = self.driver.current_url
-                logger.info(f"Popup URL: {current_url}")
-                await self.send_update(f"📊 Popup URL: {current_url[:150]}...")
-
-                # Verify we're on Instagram OAuth page
-                if "instagram.com/oauth" in current_url or "instagram.com" in current_url:
-                    await self.send_update("✓ Confirmed Instagram OAuth page loaded")
-                    logger.info(f"Instagram OAuth URL verified: {current_url[:200]}")
-                else:
-                    await self.send_update(f"⚠️ Warning: URL doesn't contain 'instagram.com/oauth'")
-                    await self.send_update(f"Current URL: {current_url[:150]}")
-
-                # Wait for page to fully load
-                await self.send_update("⏳ Waiting for OAuth page to fully load...")
                 time.sleep(2)
+                is_popup = True
+            else:
+                # Scenario 2: OAuth page opened in same window (no popup)
+                await self.send_update("✓ No popup detected - OAuth page may have loaded in same window")
+                is_popup = False
 
-                # List all buttons for debugging
-                logger.info("=" * 60)
-                logger.info("STEP 3 - LISTING ALL BUTTONS ON OAUTH PAGE:")
-                self.list_clickable_elements(keyword="Log in")
-                logger.info("=" * 60)
+            # Get current URL regardless of popup or same-window
+            current_url = self.driver.current_url
+            logger.info(f"Current URL: {current_url}")
+            await self.send_update(f"📊 Current URL: {current_url[:150]}...")
 
-                await self.send_update("🔍 Looking for 'Log in as [username]' button...")
+            # Verify we're on Instagram OAuth page
+            if "instagram.com/oauth" in current_url or "instagram.com" in current_url:
+                await self.send_update("✓ Confirmed Instagram OAuth page loaded")
+                logger.info(f"Instagram OAuth URL verified: {current_url[:200]}")
+            else:
+                await self.send_update(f"⚠️ Warning: Not on expected Instagram OAuth page")
+                await self.send_update(f"Expected: instagram.com/oauth")
+                await self.send_update(f"Got: {current_url[:150]}")
+                # Continue anyway - maybe the button is still there
 
-                # Selectors to find "Log in as [username]" button on Instagram OAuth page
-                login_as_selectors = [
-                    {
-                        'type': 'xpath',
-                        'selector': "//div[@role='button' and contains(text(), 'Log in as')]",
-                        'desc': 'XPath - Div role=button with Log in as text',
-                        'verify_text': 'Log in as'
-                    },
-                    {
-                        'type': 'xpath',
-                        'selector': "//button[contains(text(), 'Log in as')]",
-                        'desc': 'XPath - Button element with Log in as text',
-                        'verify_text': 'Log in as'
-                    },
-                    {
-                        'type': 'xpath',
-                        'selector': "//div[@role='button' and @tabindex='0' and contains(text(), 'Log in as')]",
-                        'desc': 'XPath - Div role=button tabindex=0 with Log in as',
-                        'verify_text': 'Log in as'
-                    },
-                    {
-                        'type': 'xpath',
-                        'selector': "//div[@role='button' and starts-with(text(), 'Log in as')]",
-                        'desc': 'XPath - Div role=button starting with Log in as',
-                        'verify_text': 'Log in as'
-                    },
-                    {
-                        'type': 'xpath',
-                        'selector': "//*[contains(@class, 'x1i10hfl') and @role='button' and contains(text(), 'Log in as')]",
-                        'desc': 'XPath - Element with x1i10hfl class and Log in as',
-                        'verify_text': 'Log in as'
-                    },
-                    {
-                        'type': 'xpath',
-                        'selector': "//*[@role='button' and contains(., 'Log in as')]",
-                        'desc': 'XPath - Any button containing Log in as',
-                        'verify_text': 'Log in as'
-                    },
-                    {
-                        'type': 'xpath',
-                        'selector': "//a[contains(text(), 'Log in as')]",
-                        'desc': 'XPath - Link element with Log in as text',
-                        'verify_text': 'Log in as'
-                    },
-                    {
-                        'type': 'xpath',
-                        'selector': "//*[contains(text(), 'Log in as') and (@role='button' or self::button or self::a)]",
-                        'desc': 'XPath - Any clickable element with Log in as text',
-                        'verify_text': 'Log in as'
-                    },
-                ]
+            # Wait for page to fully load
+            await self.send_update("⏳ Waiting for OAuth page to fully load...")
+            time.sleep(3)
 
-                # Try to find and click "Log in as [username]" button
-                success, msg = self.try_find_and_click(login_as_selectors, "STEP 3 - Log in as username", timeout=20, verify_text='Log in as', check_iframes=False)
-                await self.send_update(msg)
+            # List all buttons for debugging
+            logger.info("=" * 60)
+            logger.info("STEP 3 - LISTING ALL BUTTONS ON OAUTH PAGE:")
+            self.list_clickable_elements(keyword="Log in")
+            logger.info("=" * 60)
 
-                if success:
-                    # Button found and clicked - SUCCESS
-                    await self.send_update("✅ STEP 3 SUCCESS: Clicked 'Log in as [username]' button")
-                    logger.info("Successfully clicked 'Log in as' button on Instagram OAuth page")
+            await self.send_update("🔍 Looking for 'Log in as [username]' button...")
 
-                    # Wait for popup to process the click
-                    await self.send_update("⏳ Waiting for authorization to process...")
-                    time.sleep(3)
+            # Selectors to find "Log in as [username]" button on Instagram OAuth page
+            login_as_selectors = [
+                {
+                    'type': 'xpath',
+                    'selector': "//button[contains(text(), 'Log in as')]",
+                    'desc': 'XPath - Button element with Log in as text',
+                    'verify_text': 'Log in as'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//div[@role='button' and contains(text(), 'Log in as')]",
+                    'desc': 'XPath - Div role=button with Log in as text',
+                    'verify_text': 'Log in as'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//*[@role='button' and contains(text(), 'Log in as')]",
+                    'desc': 'XPath - Any element role=button with Log in as text',
+                    'verify_text': 'Log in as'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//button[@type='button' and contains(text(), 'Log in as')]",
+                    'desc': 'XPath - Button type=button with Log in as text',
+                    'verify_text': 'Log in as'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//div[@role='button' and @tabindex='0' and contains(text(), 'Log in as')]",
+                    'desc': 'XPath - Div role=button tabindex=0 with Log in as',
+                    'verify_text': 'Log in as'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//div[@role='button' and starts-with(text(), 'Log in as')]",
+                    'desc': 'XPath - Div role=button starting with Log in as',
+                    'verify_text': 'Log in as'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//*[contains(@class, 'x1i10hfl') and @role='button' and contains(text(), 'Log in as')]",
+                    'desc': 'XPath - Element with x1i10hfl class and Log in as',
+                    'verify_text': 'Log in as'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//*[@role='button' and contains(., 'Log in as')]",
+                    'desc': 'XPath - Any button containing Log in as',
+                    'verify_text': 'Log in as'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//a[contains(text(), 'Log in as')]",
+                    'desc': 'XPath - Link element with Log in as text',
+                    'verify_text': 'Log in as'
+                },
+                {
+                    'type': 'xpath',
+                    'selector': "//*[contains(text(), 'Log in as') and (@role='button' or self::button or self::a)]",
+                    'desc': 'XPath - Any clickable element with Log in as text',
+                    'verify_text': 'Log in as'
+                },
+            ]
 
-                    # Popup should close automatically, switch back to main window
+            # Try to find and click "Log in as [username]" button
+            success, msg = self.try_find_and_click(login_as_selectors, "STEP 3 - Log in as username", timeout=20, verify_text='Log in as', check_iframes=False)
+            await self.send_update(msg)
+
+            if success:
+                # Button found and clicked - SUCCESS
+                await self.send_update("✅ STEP 3 SUCCESS: Clicked 'Log in as [username]' button")
+                logger.info("Successfully clicked 'Log in as' button on Instagram OAuth page")
+
+                # Wait for authorization to process
+                await self.send_update("⏳ Waiting for authorization to process...")
+                time.sleep(4)
+
+                # Handle window switching based on whether it was a popup or same window
+                if is_popup:
+                    # Popup scenario - should close automatically, switch back to main window
                     try:
                         if len(self.driver.window_handles) > 1:
                             await self.send_update("🔄 OAuth popup still open, waiting for auto-close...")
@@ -664,22 +687,23 @@ class InstagramAutomation:
                         logger.error(f"Error switching windows: {switch_error}")
                         await self.send_update(f"⚠️ Warning: Issue switching windows - {str(switch_error)[:50]}")
                 else:
-                    # Button NOT found - this is a FAILURE
-                    await self.send_update("❌ STEP 3 FAILED: Could not find 'Log in as [username]' button on OAuth page")
-                    logger.error("Failed to find 'Log in as' button on Instagram OAuth page")
-                    self.take_screenshot("step3_FAILED_no_login_button")
+                    # Same window scenario - page should redirect automatically
+                    await self.send_update("✓ Waiting for page redirect after authorization...")
+                    time.sleep(2)
+                    current_url = self.driver.current_url
+                    logger.info(f"After OAuth authorization URL: {current_url[:100]}")
+            else:
+                # Button NOT found - this is a FAILURE
+                await self.send_update("❌ STEP 3 FAILED: Could not find 'Log in as [username]' button on OAuth page")
+                logger.error("Failed to find 'Log in as' button on Instagram OAuth page")
+                self.take_screenshot("step3_FAILED_no_login_button")
 
-                    # Switch back to main window before returning failure
+                # Switch back to main window if it was a popup
+                if is_popup:
                     try:
                         self.driver.switch_to.window(self.driver.window_handles[0])
                     except:
                         pass
-                    return False, self.screenshots
-            else:
-                # No popup opened - FAIL
-                await self.send_update("❌ STEP 3 FAILED: No Instagram OAuth popup/tab opened")
-                logger.error("No popup detected after clicking Step 2 'Log in with Instagram' button")
-                self.take_screenshot("step3_FAILED_no_popup")
                 return False, self.screenshots
 
             # ==================== STEP 4 ====================
