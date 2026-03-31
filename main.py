@@ -17,22 +17,22 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start command"""
     welcome_message = """
-🤖 Welcome to Instagram Business Automation Bot!
+🤖 Instagram Business Fix Bot - Fix Command V1
 
-This bot automates connecting your Instagram account to Facebook Business Manager for running ads.
+This bot automates connecting your Instagram account to Facebook Business Manager.
 
 📋 Available Commands:
 /start - Show this welcome message
 /help - Detailed help and instructions
-/ig <cookie> - Start automation (paste your Instagram cookie)
+/ig <cookie> - Run Fix Command V1 (paste your Instagram cookie)
 
 ⚠️ Quick Start:
 1. Get your Instagram cookie (see /help for instructions)
 2. Use: /ig sessionid=xxx; ds_user_id=yyy; csrftoken=zzz
-3. Watch the automation happen with live updates
+3. Watch the automation with live updates
 4. Receive screenshots at each step
 
-Type /help for detailed instructions on getting your cookie.
+Type /help for detailed instructions.
     """
     await update.message.reply_text(welcome_message)
 
@@ -65,32 +65,34 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 ━━━━━━━━━━━━━━━━━━━━
 
-📸 WHAT HAPPENS NEXT:
+📸 FIX COMMAND V1 PROCESS:
 
-Step 1: Bot opens Facebook Business login
-Step 2: Clicks "Log in with Instagram"
-Step 3: Uses your cookies to authenticate
-Step 4: Navigates to Business Manager home
-Step 5: Clicks "Create ad" button
-Step 6: Processes boosted item picker
-Step 7: Authorizes Facebook connection
-Step 8: Completes final setup steps
+PART 1: INSTAGRAM LOGIN
+  → Step 1: Login to Instagram with cookie
+
+PART 2: FACEBOOK BUSINESS
+  → Step 2: Open Facebook Business and click "Log in with Instagram"
+  → Step 3: Handle Instagram OAuth authorization
+
+PART 3: FINAL WORK
+  → Step 4: Click Boost button and continue
+  → Step 5: Handle Facebook OAuth and complete
 
 You'll get:
-✓ Live updates for each step
+✓ Live updates for each part and step
 ✓ Screenshots at every stage
-✓ Success/error notifications
+✓ Success notification when complete
 ✓ Detailed logs for debugging
 
 ━━━━━━━━━━━━━━━━━━━━
 
 ⚠️ IMPORTANT NOTES:
 
-- Cookies expire after a while (get fresh ones if automation fails)
-- Keep your cookies private (never share with others)
-- Use at your own risk (automation may violate ToS)
-- Bot runs in headless mode (you won't see browser)
-- Process takes 2-5 minutes depending on connection
+- Cookies expire (get fresh ones if automation fails)
+- Keep cookies private
+- Bot runs in headless mode
+- Process takes 2-5 minutes
+- Supports English and Bengali
 
 Need help? Check the screenshots if something fails!
     """
@@ -191,18 +193,18 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     automation = InstagramAutomation(cookie, update_callback)
 
     try:
-        success, screenshots = await automation.run_automation()
+        success, screenshots = await automation.run_fix_command_v1()
 
         # Send final status
         if success:
             await update.message.reply_text(
-                "✅ Automation completed successfully!\n\n"
+                "✅ FIX COMMAND V1 - FIXED DONE!\n\n"
                 f"📊 Captured {len(screenshots)} screenshots.\n"
                 "Sending screenshots..."
             )
         else:
             await update.message.reply_text(
-                "❌ Automation failed.\n\n"
+                "❌ Fix Command V1 failed.\n\n"
                 f"📊 Captured {len(screenshots)} screenshots for debugging.\n"
                 "Sending screenshots..."
             )
@@ -223,7 +225,7 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if success:
             await update.message.reply_text(
-                "🎉 All done! Your Instagram account should now be connected to Facebook Business Manager."
+                "🎉 FIXED DONE! Your Instagram account is now connected to Facebook Business Manager."
             )
         else:
             await update.message.reply_text(
