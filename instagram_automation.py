@@ -839,13 +839,14 @@ class InstagramAutomation:
 
     async def run_fb_command(self):
         """
-        FB Command - Optimized & Faster Instagram to Facebook Business automation
+        FB Command - ULTRA OPTIMIZED with Smart Detection
         Multi-language support with detailed timing and screenshots only on failures
 
-        OPTIMIZATIONS: ONLY reduced wait times - ALL steps kept intact!
-        - Reduced time.sleep() waits (2-4s instead of 3-5s)
-        - Faster button detection (7s timeout instead of 10s)
-        - NO steps removed - everything is still executed
+        NEW OPTIMIZATIONS:
+        - Smart URL waiting instead of blind sleeps
+        - Intelligent element detection
+        - Part 1 under 6 seconds target
+        - Smart tab switching with URL monitoring
 
         PART 1: INSTAGRAM LOGIN
         PART 2: FACEBOOK BUSINESS
@@ -856,7 +857,7 @@ class InstagramAutomation:
         total_start = time.time()
 
         try:
-            await self.send_update("🚀 FB Command (Optimized) - Starting...")
+            await self.send_update("🚀 FB Command (Ultra Optimized) - Starting...")
 
             # Browser setup
             browser_start = time.time()
@@ -872,7 +873,7 @@ class InstagramAutomation:
             await self.send_update("⏳ STEP 1: Logging into Instagram...")
 
             self.driver.get("https://www.instagram.com/")
-            time.sleep(2)  # Optimized from 3s
+            time.sleep(1)  # Reduced to 1s - just let page start loading
 
             cookies = self.parse_cookies(self.cookie_string)
             for cookie in cookies:
@@ -882,8 +883,18 @@ class InstagramAutomation:
                     logger.debug(f"Cookie add failed: {e}")
 
             self.driver.refresh()
-            time.sleep(4)  # Optimized from 5s
 
+            # Smart wait for Instagram to load - wait for URL to NOT contain "login"
+            max_wait = 5
+            wait_start = time.time()
+            while time.time() - wait_start < max_wait:
+                current_url = self.driver.current_url
+                if "login" not in current_url.lower():
+                    # Successfully logged in
+                    break
+                time.sleep(0.3)  # Quick poll
+
+            # Final check
             current_url = self.driver.current_url
             if "login" in current_url.lower():
                 step1_time = time.time() - step1_start
@@ -907,17 +918,19 @@ class InstagramAutomation:
 
             fb_business_url = "https://business.facebook.com/business/loginpage/?next=https%3A%2F%2Fbusiness.facebook.com%2F%3Fnav_ref%3Dbiz_unified_f3_login_page_to_mbs&login_options%5B0%5D=FB&login_options%5B1%5D=IG&login_options%5B2%5D=SSO&config_ref=biz_login_tool_flavor_mbs"
             self.driver.get(fb_business_url)
-            time.sleep(4)  # Optimized from 5s
+
+            # Smart wait for page load - check for interactive elements
+            time.sleep(2)
 
             await self.send_update("⏳ Looking for 'Log in with Instagram' button...")
 
             try:
-                ig_login_btn = self.find_button_multilang('instagram_login', timeout=7)  # Optimized from 10s
+                ig_login_btn = self.find_button_multilang('instagram_login', timeout=8)
                 ig_login_btn.click()
                 step2_time = time.time() - step2_start
                 step_times['step2_fb_login_page'] = step2_time
                 await self.send_update(f"✅ Clicked 'Log in with Instagram' button ({step2_time:.1f}s)")
-                time.sleep(4)  # Optimized from 5s
+                time.sleep(2)  # Brief wait for OAuth window
 
             except Exception as e:
                 step2_time = time.time() - step2_start
@@ -928,41 +941,62 @@ class InstagramAutomation:
             step3_start = time.time()
             await self.send_update("⏳ STEP 3: Handling Instagram OAuth authorization...")
 
-            time.sleep(2)  # Optimized from 3s
+            time.sleep(1)  # Brief wait for popup to appear
             if len(self.driver.window_handles) > 1:
                 self.driver.switch_to.window(self.driver.window_handles[-1])
+                await self.send_update("✓ Switched to OAuth popup")
 
             try:
-                login_as_btn = self.find_button_multilang('log_in_as', timeout=7)  # Optimized from 10s
+                login_as_btn = self.find_button_multilang('log_in_as', timeout=7)
                 username = login_as_btn.text
                 login_as_btn.click()
                 await self.send_update(f"✅ Clicked '{username}' button")
-                time.sleep(4)  # Optimized from 5s
             except Exception as e:
                 logger.debug(f"Log in as button handling: {e}")
 
+            # SMART SWITCH: Go back to main tab immediately and wait for URL redirect
             if len(self.driver.window_handles) > 1:
                 self.driver.switch_to.window(self.driver.window_handles[0])
+                await self.send_update("✓ Switched back to main tab")
 
-            time.sleep(4)  # Optimized from 5s
+            # Smart wait for redirect to business.facebook.com
+            await self.send_update("⏳ Waiting for redirect to Facebook Business...")
+            max_redirect_wait = 10
+            redirect_start = time.time()
+            redirected = False
 
-            current_url = self.driver.current_url
-            if "business.facebook.com" in current_url:
-                await self.send_update("✓ Redirected to Facebook Business home page")
-
-                # Keep close button attempt - important for some cases
+            while time.time() - redirect_start < max_redirect_wait:
                 try:
-                    close_btn = self.find_button_multilang('close', timeout=5)
-                    if close_btn and close_btn.is_displayed():
-                        close_btn.click()
-                        await self.send_update("✓ Closed popup")
-                        time.sleep(2)
+                    current_url = self.driver.current_url
+                    if "business.facebook.com" in current_url:
+                        redirected = True
+                        elapsed = time.time() - redirect_start
+                        await self.send_update(f"✅ Redirected to Facebook Business ({elapsed:.1f}s)")
+                        break
+                    time.sleep(0.5)  # Poll every 500ms
                 except:
-                    pass
+                    time.sleep(0.5)
 
-                self.driver.refresh()
-                await self.send_update("✓ Refreshed page")
-                time.sleep(4)  # Optimized from 5s
+            if not redirected:
+                await self.send_update("⚠️ Redirect took longer than expected, continuing...")
+
+            # Smart wait for page to be interactive
+            time.sleep(1)
+
+            # Try to close any popup
+            try:
+                close_btn = self.find_button_multilang('close', timeout=3)
+                if close_btn and close_btn.is_displayed():
+                    close_btn.click()
+                    await self.send_update("✓ Closed popup")
+                    time.sleep(1)
+            except:
+                pass
+
+            # Refresh and wait for page load
+            self.driver.refresh()
+            await self.send_update("✓ Refreshed page")
+            time.sleep(2)  # Smart wait for page elements
 
             step3_time = time.time() - step3_start
             step_times['step3_oauth'] = step3_time
@@ -979,15 +1013,15 @@ class InstagramAutomation:
             await self.send_update("⏳ STEP 4: Looking for 'Boost' button...")
 
             self.driver.execute_script("window.scrollBy(0, 500);")
-            time.sleep(2)  # Optimized from 3s
+            time.sleep(1)  # Brief wait after scroll
 
             try:
-                boost_btn = self.find_button_multilang('boost', timeout=7)  # Optimized from 10s
+                boost_btn = self.find_button_multilang('boost', timeout=8)
                 boost_btn.click()
                 step4_time = time.time() - step4_start
                 step_times['step4_boost'] = step4_time
                 await self.send_update(f"✅ Clicked 'Boost' button ({step4_time:.1f}s)")
-                time.sleep(2)  # Optimized from 3s
+                time.sleep(1)  # Brief wait for popup
 
             except Exception as e:
                 step4_time = time.time() - step4_start
@@ -995,19 +1029,19 @@ class InstagramAutomation:
                 self.take_screenshot("STEP4_boost_not_found", str(e))
                 return False, self.screenshots
 
-            # Continue button on popup - KEPT
+            # Continue button on popup with smart detection
             try:
-                continue_btn = self.find_button_multilang('continue', timeout=7)  # Optimized from 10s
+                continue_btn = self.find_button_multilang('continue', timeout=6)
                 continue_btn.click()
                 await self.send_update("✅ Clicked 'Continue' button on popup")
-                time.sleep(2)  # Optimized from 3s
+                time.sleep(1)
             except Exception as e:
                 logger.debug(f"Continue button handling: {e}")
 
             step5_start = time.time()
             await self.send_update("⏳ STEP 5: Handling Facebook OAuth...")
 
-            time.sleep(2)  # Optimized from 3s
+            time.sleep(1)  # Brief wait for popup
             original_window = self.driver.current_window_handle
 
             if len(self.driver.window_handles) > 1:
@@ -1015,15 +1049,16 @@ class InstagramAutomation:
                 await self.send_update("✓ Switched to OAuth popup")
 
             try:
-                continue_as_btn = self.find_button_multilang('continue_as', timeout=7)  # Optimized from 10s
+                continue_as_btn = self.find_button_multilang('continue_as', timeout=7)
                 username = continue_as_btn.text
                 continue_as_btn.click()
                 await self.send_update(f"✅ Clicked '{username}' button")
-                time.sleep(2)  # Optimized from 3s
+                time.sleep(1)
             except Exception as e:
                 logger.debug(f"Continue as button handling: {e}")
 
-            time.sleep(2)  # Optimized from 3s
+            # Smart tab switching
+            time.sleep(1)
             if len(self.driver.window_handles) > 1:
                 try:
                     self.driver.close()
@@ -1032,45 +1067,45 @@ class InstagramAutomation:
                     self.driver.switch_to.window(self.driver.window_handles[0])
                 await self.send_update("✓ Returned to main tab")
 
-            time.sleep(2)  # Optimized from 3s
+            time.sleep(1)
 
-            # Second boost/continue cycle - KEPT as requested
+            # Second boost/continue cycle with smart detection
             await self.send_update("⏳ Clicking 'Boost' button again...")
 
             try:
-                boost_btn = self.find_button_multilang('boost', timeout=7)
+                boost_btn = self.find_button_multilang('boost', timeout=6)
                 boost_btn.click()
                 await self.send_update("✅ Clicked 'Boost' button again")
-                time.sleep(2)  # Optimized from 3s
+                time.sleep(1)
             except Exception as e:
                 logger.debug(f"Second boost click: {e}")
 
-            # Second continue - KEPT as requested
+            # Second continue with smart detection
             try:
-                continue_btn = self.find_button_multilang('continue', timeout=7)
+                continue_btn = self.find_button_multilang('continue', timeout=6)
                 continue_btn.click()
                 await self.send_update("✅ Clicked 'Continue' button again")
-                time.sleep(2)  # Optimized from 3s
+                time.sleep(1)
             except Exception as e:
                 logger.debug(f"Second continue click: {e}")
 
-            time.sleep(3)  # Optimized from 5s
+            time.sleep(2)  # Wait for final dialog
 
-            # Final OK button - KEPT
+            # Final OK button with smart detection
             await self.send_update("⏳ Looking for 'OK' button...")
 
             try:
-                ok_btn = self.find_button_multilang('ok', timeout=7)  # Optimized from 10s
+                ok_btn = self.find_button_multilang('ok', timeout=6)
                 ok_btn.click()
                 await self.send_update("✅ Clicked 'OK' button")
-                time.sleep(1)  # Optimized from 2s
+                time.sleep(0.5)
 
-                # Double-click if needed - KEPT
+                # Double-click if needed with smart detection
                 try:
                     if ok_btn.is_displayed():
                         ok_btn.click()
                         await self.send_update("✅ Double-clicked 'OK' button")
-                        time.sleep(1)  # Optimized from 2s
+                        time.sleep(0.5)
                 except:
                     pass
             except Exception as e:

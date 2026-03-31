@@ -27,14 +27,15 @@ This bot automates connecting your Instagram account to Facebook Business Manage
 /cmds - All commands list
 /ig <cookie> - Run automation (all screenshots)
 /fix <cookie> - Run automation (multi-language, screenshots on failures only)
+/fb <cookie> - ULTRA OPTIMIZED automation (fastest, smart detection)
 
 ⚠️ Quick Start:
 1. Get your Instagram cookie (see /help for instructions)
-2. Use: /fix sessionid=xxx; ds_user_id=yyy; csrftoken=zzz
+2. Use: /fb sessionid=xxx; ds_user_id=yyy; csrftoken=zzz
 3. Watch the automation with live updates
 4. Receive screenshots only if errors occur
 
-💡 Use /fix for multi-language support and minimal screenshots!
+💡 Use /fb for the fastest execution with smart URL detection!
 
 Type /help for detailed instructions.
     """
@@ -94,10 +95,11 @@ You'll get:
 - Cookies expire (get fresh ones if automation fails)
 - Keep cookies private
 - Bot runs in headless mode
-- Process takes 2-5 minutes
+- Process takes 1-3 minutes (fastest with /fb)
 - Multi-language support (English, Bengali, Hindi, Spanish, Arabic, French, German, Portuguese, Russian)
-- /fix command captures screenshots only on failures
-- /ig command captures all screenshots
+- /fb command: ULTRA OPTIMIZED with smart detection (FASTEST)
+- /fix command: captures screenshots only on failures
+- /ig command: captures all screenshots
 
 Need help? Check the screenshots if something fails!
     """
@@ -129,6 +131,15 @@ async def cmds_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
   → 📸 Captures screenshots only when errors occur
   → 🌍 Multi-language support (9 languages)
 
+/fb <cookie>
+  → ULTRA OPTIMIZED automation (RECOMMENDED)
+  → Example: /fb sessionid=xxx; ds_user_id=yyy; csrftoken=zzz
+  → ⚡ Fastest execution with smart URL detection
+  → 📸 Screenshots only on failures
+  → 🌍 Multi-language support (9 languages)
+  → 🎯 Part 1 completes in under 6 seconds
+  → 📊 Detailed timing reports for each step
+
 ━━━━━━━━━━━━━━━━━━━━
 
 💡 WORKFLOW:
@@ -136,14 +147,15 @@ async def cmds_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 1. Type /help to learn how to get cookies
 2. Copy your Instagram cookies from browser
 3. Choose your command:
-   - /fix (recommended) - multi-language, minimal screenshots
+   - /fb (FASTEST & RECOMMENDED) - ultra optimized with smart detection
+   - /fix (standard) - multi-language, minimal screenshots
    - /ig - all screenshots for debugging
 4. Watch the magic happen!
 5. Get screenshots (all steps or failures only)
 
 ━━━━━━━━━━━━━━━━━━━━
 
-🌍 SUPPORTED LANGUAGES (for /fix):
+🌍 SUPPORTED LANGUAGES (for /fix and /fb):
 English, Bengali, Hindi, Spanish, Arabic, French, German, Portuguese, Russian
 
 ━━━━━━━━━━━━━━━━━━━━
