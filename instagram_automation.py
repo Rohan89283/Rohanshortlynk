@@ -1132,6 +1132,18 @@ class InstagramAutomation:
             logger.info(f"Final URL after Step 10: {current_url}")
             await self.send_update(f"📊 Final URL: {current_url[:100]}...")
 
+            # Check for any popup with OK button and click it
+            time.sleep(2)
+            try:
+                ok_button = self.driver.find_element(By.XPATH, "//div[@role='dialog']//div[@role='button' and text()='OK']")
+                if ok_button and ok_button.is_displayed():
+                    ok_button.click()
+                    logger.info("Clicked OK on popup")
+                    await self.send_update("✓ Clicked OK on popup")
+                    time.sleep(1)
+            except:
+                pass
+
             # ==================== FINAL ====================
             await self.send_update("\n✅ ALL 10 STEPS COMPLETED SUCCESSFULLY!")
             await self.send_update("✅ Instagram account fully connected to Facebook Business Manager")
