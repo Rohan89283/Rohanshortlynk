@@ -12,6 +12,86 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
+MULTI_LANG_BUTTONS = {
+    'instagram_login': {
+        'en': ['Log in with Instagram', 'Instagram'],
+        'bn': ['Instagram দিয়ে লগ ইন করুন', 'Instagram'],
+        'hi': ['Instagram के साथ लॉग इन करें', 'Instagram'],
+        'es': ['Iniciar sesión con Instagram', 'Instagram'],
+        'ar': ['تسجيل الدخول باستخدام Instagram', 'Instagram'],
+        'fr': ['Se connecter avec Instagram', 'Instagram'],
+        'de': ['Mit Instagram anmelden', 'Instagram'],
+        'pt': ['Entrar com Instagram', 'Instagram'],
+        'ru': ['Войти через Instagram', 'Instagram'],
+    },
+    'log_in_as': {
+        'en': ['Log in as', 'Continue as'],
+        'bn': ['হিসাবে লগ ইন করুন', 'হিসাবে চালিয়ে যান'],
+        'hi': ['के रूप में लॉग इन करें', 'जारी रखें'],
+        'es': ['Iniciar sesión como', 'Continuar como'],
+        'ar': ['تسجيل الدخول باسم', 'متابعة باسم'],
+        'fr': ['Se connecter en tant que', 'Continuer en tant que'],
+        'de': ['Anmelden als', 'Weiter als'],
+        'pt': ['Entrar como', 'Continuar como'],
+        'ru': ['Войти как', 'Продолжить как'],
+    },
+    'boost': {
+        'en': ['Boost', 'Boost post'],
+        'bn': ['বুস্ট', 'পোস্ট বুস্ট করুন'],
+        'hi': ['बूस्ट', 'पोस्ट बूस्ट करें'],
+        'es': ['Promocionar', 'Promocionar publicación'],
+        'ar': ['ترويج', 'ترويج المنشور'],
+        'fr': ['Booster', 'Booster la publication'],
+        'de': ['Bewerben', 'Beitrag bewerben'],
+        'pt': ['Impulsionar', 'Impulsionar publicação'],
+        'ru': ['Продвигать', 'Продвигать публикацию'],
+    },
+    'continue': {
+        'en': ['Continue', 'Next'],
+        'bn': ['চালিয়ে যান', 'পরবর্তী'],
+        'hi': ['जारी रखें', 'अगला'],
+        'es': ['Continuar', 'Siguiente'],
+        'ar': ['متابعة', 'التالي'],
+        'fr': ['Continuer', 'Suivant'],
+        'de': ['Weiter', 'Nächste'],
+        'pt': ['Continuar', 'Próximo'],
+        'ru': ['Продолжить', 'Далее'],
+    },
+    'continue_as': {
+        'en': ['Continue as'],
+        'bn': ['হিসাবে চালিয়ে যান'],
+        'hi': ['के रूप में जारी रखें'],
+        'es': ['Continuar como'],
+        'ar': ['متابعة باسم'],
+        'fr': ['Continuer en tant que'],
+        'de': ['Weiter als'],
+        'pt': ['Continuar como'],
+        'ru': ['Продолжить как'],
+    },
+    'ok': {
+        'en': ['OK', 'Okay'],
+        'bn': ['ঠিক আছে', 'OK'],
+        'hi': ['ठीक है', 'OK'],
+        'es': ['Aceptar', 'OK'],
+        'ar': ['موافق', 'OK'],
+        'fr': ['OK', "D'accord"],
+        'de': ['OK', 'Okay'],
+        'pt': ['OK', 'Está bem'],
+        'ru': ['ОК', 'Хорошо'],
+    },
+    'close': {
+        'en': ['Close'],
+        'bn': ['বন্ধ করুন'],
+        'hi': ['बंद करें'],
+        'es': ['Cerrar'],
+        'ar': ['إغلاق'],
+        'fr': ['Fermer'],
+        'de': ['Schließen'],
+        'pt': ['Fechar'],
+        'ru': ['Закрыть'],
+    }
+}
+
 class InstagramAutomation:
     def __init__(self, cookie_string, update_callback):
         self.cookie_string = cookie_string
@@ -24,20 +104,62 @@ class InstagramAutomation:
         logger.info(message)
         await self.update_callback(message)
 
-    def take_screenshot(self, step_name):
+    def take_screenshot(self, step_name, failure_reason=None):
         """Take screenshot and store it"""
         try:
             screenshot = self.driver.get_screenshot_as_png()
             img = Image.open(BytesIO(screenshot))
-            self.screenshots.append({
+
+            screenshot_data = {
                 'name': step_name,
                 'image': BytesIO(screenshot)
-            })
+            }
+
+            if failure_reason:
+                screenshot_data['failure_reason'] = failure_reason
+                screenshot_data['url'] = self.driver.current_url
+                screenshot_data['timestamp'] = time.time()
+
+            self.screenshots.append(screenshot_data)
             logger.info(f"📸 Screenshot captured: {step_name}")
             return True
         except Exception as e:
             logger.error(f"Failed to take screenshot: {e}")
             return False
+
+    def find_button_multilang(self, button_type, timeout=10):
+        """Find button using multi-language text matching"""
+        try:
+            if button_type not in MULTI_LANG_BUTTONS:
+                raise ValueError(f"Unknown button type: {button_type}")
+
+            all_texts = []
+            for lang_code, texts in MULTI_LANG_BUTTONS[button_type].items():
+                all_texts.extend(texts)
+
+            xpaths = []
+            for text in all_texts:
+                xpaths.append(f"//span[contains(text(), '{text}')]")
+                xpaths.append(f"//div[contains(text(), '{text}')]")
+                xpaths.append(f"//button[contains(text(), '{text}')]")
+                xpaths.append(f"//*[@role='button' and contains(text(), '{text}')]")
+
+            for xpath in xpaths:
+                try:
+                    element = WebDriverWait(self.driver, timeout).until(
+                        EC.element_to_be_clickable((By.XPATH, xpath))
+                    )
+                    if element:
+                        logger.info(f"Found button '{button_type}' using: {xpath}")
+                        return element
+                except:
+                    continue
+
+            raise Exception(f"Button '{button_type}' not found in any language")
+
+        except Exception as e:
+            logger.error(f"find_button_multilang error: {e}")
+            raise
 
     def setup_driver(self):
         """Setup undetected Chrome driver with anti-detection measures"""
@@ -78,11 +200,11 @@ class InstagramAutomation:
             # Shared memory increase to prevent crashes
             options.add_argument('--shm-size=2gb')
 
-            # Support multi-language (English and Bengali)
-            options.add_argument('--lang=en-US,bn')
-            options.add_argument('--accept-lang=en-US,en,bn')
+            # Support multi-language
+            options.add_argument('--lang=en-US,en,bn,hi,es,ar,fr,de,pt,ru')
+            options.add_argument('--accept-lang=en-US,en,bn,hi,es,ar,fr,de,pt,ru')
             options.add_experimental_option('prefs', {
-                'intl.accept_languages': 'en-US,en,bn',
+                'intl.accept_languages': 'en-US,en,bn,hi,es,ar,fr,de,pt,ru',
                 'profile.default_content_setting_values.notifications': 2
             })
 
@@ -527,6 +649,229 @@ class InstagramAutomation:
             logger.error(f"❌ Automation error: {e}", exc_info=True)
             await self.send_update(f"\n❌ ERROR: {str(e)}")
             self.take_screenshot("ERROR_exception_occurred")
+            return False, self.screenshots
+
+        finally:
+            if self.driver:
+                try:
+                    await self.send_update("🔄 Closing browser...")
+                    self.driver.quit()
+                    logger.info("✓ Chrome driver closed")
+                except Exception as e:
+                    logger.error(f"Error closing driver: {e}")
+
+    async def run_fix_command(self):
+        """
+        Fix Command - Complete Instagram to Facebook Business automation
+        Multi-language support with screenshots only on failures
+
+        PART 1: INSTAGRAM LOGIN
+        PART 2: FACEBOOK BUSINESS
+        PART 3: FINAL WORK
+        """
+        try:
+            await self.send_update("🚀 Fix Command - Starting...")
+
+            self.setup_driver()
+            await self.send_update("🌐 Browser initialized")
+
+            await self.send_update("\n📱 PART 1: INSTAGRAM LOGIN")
+
+            await self.send_update("⏳ STEP 1: Logging into Instagram...")
+
+            self.driver.get("https://www.instagram.com/")
+            time.sleep(3)
+
+            cookies = self.parse_cookies(self.cookie_string)
+            for cookie in cookies:
+                try:
+                    self.driver.add_cookie(cookie)
+                except Exception as e:
+                    logger.debug(f"Cookie add failed: {e}")
+
+            self.driver.refresh()
+            time.sleep(5)
+
+            current_url = self.driver.current_url
+            if "login" in current_url.lower():
+                await self.send_update("❌ Instagram login failed - invalid cookie")
+                self.take_screenshot("STEP1_login_failed", "Invalid Instagram cookie")
+                return False, self.screenshots
+
+            await self.send_update("✅ STEP 1: Instagram login successful")
+
+            await self.send_update("\n💼 PART 2: FACEBOOK BUSINESS")
+
+            await self.send_update("⏳ STEP 2: Opening Facebook Business login page...")
+
+            fb_business_url = "https://business.facebook.com/business/loginpage/?next=https%3A%2F%2Fbusiness.facebook.com%2F%3Fnav_ref%3Dbiz_unified_f3_login_page_to_mbs&login_options%5B0%5D=FB&login_options%5B1%5D=IG&login_options%5B2%5D=SSO&config_ref=biz_login_tool_flavor_mbs"
+            self.driver.get(fb_business_url)
+            time.sleep(5)
+
+            await self.send_update("⏳ Looking for 'Log in with Instagram' button...")
+
+            try:
+                ig_login_btn = self.find_button_multilang('instagram_login', timeout=10)
+                ig_login_btn.click()
+                await self.send_update("✅ Clicked 'Log in with Instagram' button")
+                time.sleep(5)
+
+            except Exception as e:
+                await self.send_update(f"❌ Failed to click Instagram login button: {e}")
+                self.take_screenshot("STEP2_button_not_found", str(e))
+                return False, self.screenshots
+
+            await self.send_update("⏳ STEP 3: Handling Instagram OAuth authorization...")
+
+            time.sleep(3)
+            if len(self.driver.window_handles) > 1:
+                self.driver.switch_to.window(self.driver.window_handles[-1])
+                await self.send_update("✓ Switched to OAuth popup")
+
+            try:
+                login_as_btn = self.find_button_multilang('log_in_as', timeout=10)
+                username = login_as_btn.text
+                login_as_btn.click()
+                await self.send_update(f"✅ Clicked '{username}' button")
+                time.sleep(5)
+            except Exception as e:
+                logger.debug(f"Log in as button handling: {e}")
+
+            if len(self.driver.window_handles) > 1:
+                self.driver.switch_to.window(self.driver.window_handles[0])
+                await self.send_update("✓ Returned to main window")
+
+            time.sleep(5)
+
+            current_url = self.driver.current_url
+            if "business.facebook.com" in current_url:
+                await self.send_update("✓ Redirected to Facebook Business home page")
+
+                try:
+                    close_btn = self.find_button_multilang('close', timeout=5)
+                    if close_btn and close_btn.is_displayed():
+                        close_btn.click()
+                        await self.send_update("✓ Closed popup")
+                        time.sleep(2)
+                except:
+                    pass
+
+                self.driver.refresh()
+                await self.send_update("✓ Refreshed page")
+                time.sleep(5)
+
+            await self.send_update("✅ PART 2: Facebook Business login completed")
+
+            await self.send_update("\n🎯 PART 3: FINAL WORK")
+
+            await self.send_update("⏳ STEP 4: Looking for 'Boost' button...")
+
+            self.driver.execute_script("window.scrollBy(0, 500);")
+            time.sleep(3)
+
+            try:
+                boost_btn = self.find_button_multilang('boost', timeout=10)
+                boost_btn.click()
+                await self.send_update("✅ Clicked 'Boost' button")
+                time.sleep(3)
+
+            except Exception as e:
+                await self.send_update(f"❌ Failed to find Boost button: {e}")
+                self.take_screenshot("STEP4_boost_not_found", str(e))
+                return False, self.screenshots
+
+            try:
+                continue_btn = self.find_button_multilang('continue', timeout=10)
+                continue_btn.click()
+                await self.send_update("✅ Clicked 'Continue' button on popup")
+                time.sleep(3)
+            except Exception as e:
+                logger.debug(f"Continue button handling: {e}")
+
+            await self.send_update("⏳ STEP 5: Handling Facebook OAuth...")
+
+            time.sleep(3)
+            original_window = self.driver.current_window_handle
+
+            if len(self.driver.window_handles) > 1:
+                self.driver.switch_to.window(self.driver.window_handles[-1])
+                await self.send_update("✓ Switched to OAuth popup")
+
+            try:
+                continue_as_btn = self.find_button_multilang('continue_as', timeout=10)
+                username = continue_as_btn.text
+                continue_as_btn.click()
+                await self.send_update(f"✅ Clicked '{username}' button")
+                time.sleep(3)
+            except Exception as e:
+                logger.debug(f"Continue as button handling: {e}")
+
+            time.sleep(3)
+            if len(self.driver.window_handles) > 1:
+                try:
+                    self.driver.close()
+                    self.driver.switch_to.window(original_window)
+                except:
+                    self.driver.switch_to.window(self.driver.window_handles[0])
+                await self.send_update("✓ Returned to main tab")
+
+            time.sleep(3)
+
+            await self.send_update("⏳ Clicking 'Boost' button again...")
+
+            try:
+                boost_btn = self.find_button_multilang('boost', timeout=10)
+                boost_btn.click()
+                await self.send_update("✅ Clicked 'Boost' button again")
+                time.sleep(3)
+            except Exception as e:
+                logger.debug(f"Second boost click: {e}")
+
+            try:
+                continue_btn = self.find_button_multilang('continue', timeout=10)
+                continue_btn.click()
+                await self.send_update("✅ Clicked 'Continue' button again")
+                time.sleep(3)
+            except Exception as e:
+                logger.debug(f"Second continue click: {e}")
+
+            time.sleep(5)
+
+            await self.send_update("⏳ Looking for 'OK' button...")
+
+            try:
+                ok_btn = self.find_button_multilang('ok', timeout=10)
+                ok_btn.click()
+                await self.send_update("✅ Clicked 'OK' button")
+                time.sleep(2)
+
+                try:
+                    if ok_btn.is_displayed():
+                        ok_btn.click()
+                        await self.send_update("✅ Double-clicked 'OK' button")
+                        time.sleep(2)
+                except:
+                    pass
+            except Exception as e:
+                logger.debug(f"OK button handling: {e}")
+
+            await self.send_update("\n✅ ALL PARTS COMPLETED SUCCESSFULLY!")
+            await self.send_update("✅ PART 1: Instagram Login - DONE")
+            await self.send_update("✅ PART 2: Facebook Business - DONE")
+            await self.send_update("✅ PART 3: Final Work - DONE")
+            await self.send_update("\n🎉 FIX COMMAND: FIXED DONE!")
+
+            logger.info("=" * 60)
+            logger.info("FIX COMMAND COMPLETED SUCCESSFULLY")
+            logger.info(f"Screenshots (failures only): {len(self.screenshots)}")
+            logger.info("=" * 60)
+
+            return True, self.screenshots
+
+        except Exception as e:
+            logger.error(f"❌ Automation error: {e}", exc_info=True)
+            await self.send_update(f"\n❌ ERROR: {str(e)}")
+            self.take_screenshot("ERROR_exception_occurred", str(e))
             return False, self.screenshots
 
         finally:

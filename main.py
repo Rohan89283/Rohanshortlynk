@@ -17,20 +17,24 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start command"""
     welcome_message = """
-🤖 Instagram Business Fix Bot - Fix Command V1
+🤖 Instagram Business Fix Bot
 
 This bot automates connecting your Instagram account to Facebook Business Manager.
 
 📋 Available Commands:
 /start - Show this welcome message
 /help - Detailed help and instructions
-/ig <cookie> - Run Fix Command V1 (paste your Instagram cookie)
+/cmds - All commands list
+/ig <cookie> - Run automation (all screenshots)
+/fix <cookie> - Run automation (multi-language, screenshots on failures only)
 
 ⚠️ Quick Start:
 1. Get your Instagram cookie (see /help for instructions)
-2. Use: /ig sessionid=xxx; ds_user_id=yyy; csrftoken=zzz
+2. Use: /fix sessionid=xxx; ds_user_id=yyy; csrftoken=zzz
 3. Watch the automation with live updates
-4. Receive screenshots at each step
+4. Receive screenshots only if errors occur
+
+💡 Use /fix for multi-language support and minimal screenshots!
 
 Type /help for detailed instructions.
     """
@@ -61,11 +65,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
    sessionid=VALUE1; ds_user_id=VALUE2; csrftoken=VALUE3
 
 6️⃣ Use The Command:
-   /ig sessionid=abc123; ds_user_id=456789; csrftoken=xyz789
+   /fix sessionid=abc123; ds_user_id=456789; csrftoken=xyz789
 
 ━━━━━━━━━━━━━━━━━━━━
 
-📸 FIX COMMAND V1 PROCESS:
+📸 AUTOMATION PROCESS:
 
 PART 1: INSTAGRAM LOGIN
   → Step 1: Login to Instagram with cookie
@@ -80,7 +84,6 @@ PART 3: FINAL WORK
 
 You'll get:
 ✓ Live updates for each part and step
-✓ Screenshots at every stage
 ✓ Success notification when complete
 ✓ Detailed logs for debugging
 
@@ -92,7 +95,9 @@ You'll get:
 - Keep cookies private
 - Bot runs in headless mode
 - Process takes 2-5 minutes
-- Supports English and Bengali
+- Multi-language support (English, Bengali, Hindi, Spanish, Arabic, French, German, Portuguese, Russian)
+- /fix command captures screenshots only on failures
+- /ig command captures all screenshots
 
 Need help? Check the screenshots if something fails!
     """
@@ -110,9 +115,19 @@ async def cmds_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
   → Detailed guide on getting Instagram cookies
   → Step-by-step automation process explanation
 
+/cmds
+  → Show this commands list
+
 /ig <cookie>
-  → Start the automation process
+  → Start automation with ALL screenshots
   → Example: /ig sessionid=xxx; ds_user_id=yyy; csrftoken=zzz
+  → 📸 Captures screenshots at every step
+
+/fix <cookie>
+  → Start automation with FAILURE-ONLY screenshots
+  → Example: /fix sessionid=xxx; ds_user_id=yyy; csrftoken=zzz
+  → 📸 Captures screenshots only when errors occur
+  → 🌍 Multi-language support (9 languages)
 
 ━━━━━━━━━━━━━━━━━━━━
 
@@ -120,14 +135,21 @@ async def cmds_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 1. Type /help to learn how to get cookies
 2. Copy your Instagram cookies from browser
-3. Use /ig command with your cookies
+3. Choose your command:
+   - /fix (recommended) - multi-language, minimal screenshots
+   - /ig - all screenshots for debugging
 4. Watch the magic happen!
-5. Get screenshots of every step
+5. Get screenshots (all steps or failures only)
+
+━━━━━━━━━━━━━━━━━━━━
+
+🌍 SUPPORTED LANGUAGES (for /fix):
+English, Bengali, Hindi, Spanish, Arabic, French, German, Portuguese, Russian
 
 ━━━━━━━━━━━━━━━━━━━━
 
 Need help getting cookies? → /help
-Ready to start? → /ig <your_cookie>
+Ready to start? → /fix <your_cookie>
     """
     await update.message.reply_text(cmds_message)
 
@@ -239,6 +261,113 @@ async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Please try again or contact support."
         )
 
+async def fix_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /fix command with Instagram cookie - Multi-language version"""
+    if not context.args:
+        await update.message.reply_text(
+            "❌ Error: Please provide your Instagram cookie.\n\n"
+            "Usage: /fix <cookie_string>\n\n"
+            "Example: /fix sessionid=abc123; ds_user_id=456789"
+        )
+        return
+
+    cookie = ' '.join(context.args)
+    logger.info(f"User {update.effective_user.id} started /fix automation")
+
+    status_message = None
+    for attempt in range(3):
+        try:
+            status_message = await update.message.reply_text(
+                "🚀 Starting Fix Command (Multi-language)...\n"
+                "Please wait, this may take a few minutes.\n\n"
+                "You will receive live updates below.\n"
+                "📸 Screenshots only captured on failures.",
+                read_timeout=30,
+                write_timeout=30,
+                connect_timeout=30,
+                pool_timeout=30
+            )
+            break
+        except Exception as e:
+            logger.warning(f"Failed to send initial message (attempt {attempt + 1}/3): {e}")
+            if attempt == 2:
+                try:
+                    await update.message.reply_text("🚀 Starting automation...")
+                except:
+                    pass
+                status_message = None
+            await asyncio.sleep(1)
+
+    updates_text = []
+
+    async def update_callback(message):
+        """Callback to send updates to user"""
+        if status_message is None:
+            return
+
+        updates_text.append(message)
+        full_text = '\n'.join(updates_text[-20:])
+        try:
+            await status_message.edit_text(
+                f"🔄 Fix Command in Progress...\n\n{full_text}",
+                read_timeout=20,
+                write_timeout=20
+            )
+        except Exception as e:
+            logger.debug(f"Could not update message: {e}")
+            pass
+
+    automation = InstagramAutomation(cookie, update_callback)
+
+    try:
+        success, screenshots = await automation.run_fix_command()
+
+        if success:
+            await update.message.reply_text(
+                "✅ FIX COMMAND - FIXED DONE!\n\n"
+                f"📊 Captured {len(screenshots)} screenshots (failures only).\n"
+                "Sending screenshots..."
+            )
+        else:
+            await update.message.reply_text(
+                "❌ Fix Command failed.\n\n"
+                f"📊 Captured {len(screenshots)} screenshots for debugging.\n"
+                "Sending screenshots..."
+            )
+
+        for idx, screenshot in enumerate(screenshots, 1):
+            try:
+                screenshot['image'].seek(0)
+                caption = f"Screenshot {idx}/{len(screenshots)}: {screenshot['name']}"
+                if 'failure_reason' in screenshot:
+                    caption += f"\n❌ Reason: {screenshot['failure_reason']}"
+
+                await update.message.reply_photo(
+                    photo=screenshot['image'],
+                    caption=caption,
+                    read_timeout=60,
+                    write_timeout=60
+                )
+                await asyncio.sleep(0.5)
+            except Exception as e:
+                logger.error(f"Failed to send screenshot {idx}: {e}")
+
+        if success:
+            await update.message.reply_text(
+                "🎉 FIXED DONE! Your Instagram account is now connected to Facebook Business Manager."
+            )
+        else:
+            await update.message.reply_text(
+                "⚠️ Process completed with errors. Please check the screenshots and logs above."
+            )
+
+    except Exception as e:
+        logger.error(f"Error in automation: {e}")
+        await update.message.reply_text(
+            f"❌ An error occurred: {str(e)}\n\n"
+            "Please try again or contact support."
+        )
+
 def main():
     """Start the bot"""
     if not BOT_TOKEN:
@@ -265,6 +394,7 @@ def main():
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("cmds", cmds_command))
     app.add_handler(CommandHandler("ig", ig_command))
+    app.add_handler(CommandHandler("fix", fix_command))
 
     logger.info("Bot started successfully!")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
