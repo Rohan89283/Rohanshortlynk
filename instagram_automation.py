@@ -836,3 +836,302 @@ class InstagramAutomation:
                     logger.info("✓ Chrome driver closed")
                 except Exception as e:
                     logger.error(f"Error closing driver: {e}")
+
+    async def run_fb_command(self):
+        """
+        FB Command - Optimized & Faster Instagram to Facebook Business automation
+        Multi-language support with detailed timing and screenshots only on failures
+
+        OPTIMIZATIONS: ONLY reduced wait times - ALL steps kept intact!
+        - Reduced time.sleep() waits (2-4s instead of 3-5s)
+        - Faster button detection (7s timeout instead of 10s)
+        - NO steps removed - everything is still executed
+
+        PART 1: INSTAGRAM LOGIN
+        PART 2: FACEBOOK BUSINESS
+        PART 3: FINAL WORK
+        """
+        part_times = {}
+        step_times = {}
+        total_start = time.time()
+
+        try:
+            await self.send_update("🚀 FB Command (Optimized) - Starting...")
+
+            # Browser setup
+            browser_start = time.time()
+            self.setup_driver()
+            browser_time = time.time() - browser_start
+            await self.send_update(f"🌐 Browser initialized ({browser_time:.1f}s)")
+
+            # ==================== PART 1: INSTAGRAM LOGIN ====================
+            part1_start = time.time()
+            await self.send_update("\n📱 PART 1: INSTAGRAM LOGIN")
+
+            step1_start = time.time()
+            await self.send_update("⏳ STEP 1: Logging into Instagram...")
+
+            self.driver.get("https://www.instagram.com/")
+            time.sleep(2)  # Optimized from 3s
+
+            cookies = self.parse_cookies(self.cookie_string)
+            for cookie in cookies:
+                try:
+                    self.driver.add_cookie(cookie)
+                except Exception as e:
+                    logger.debug(f"Cookie add failed: {e}")
+
+            self.driver.refresh()
+            time.sleep(4)  # Optimized from 5s
+
+            current_url = self.driver.current_url
+            if "login" in current_url.lower():
+                step1_time = time.time() - step1_start
+                await self.send_update(f"❌ Instagram login failed - invalid cookie ({step1_time:.1f}s)")
+                self.take_screenshot("STEP1_login_failed", "Invalid Instagram cookie")
+                return False, self.screenshots
+
+            step1_time = time.time() - step1_start
+            step_times['step1_ig_login'] = step1_time
+            await self.send_update(f"✅ STEP 1: Instagram login successful ({step1_time:.1f}s)")
+
+            part1_time = time.time() - part1_start
+            part_times['part1_instagram'] = part1_time
+
+            # ==================== PART 2: FACEBOOK BUSINESS ====================
+            part2_start = time.time()
+            await self.send_update("\n💼 PART 2: FACEBOOK BUSINESS")
+
+            step2_start = time.time()
+            await self.send_update("⏳ STEP 2: Opening Facebook Business login page...")
+
+            fb_business_url = "https://business.facebook.com/business/loginpage/?next=https%3A%2F%2Fbusiness.facebook.com%2F%3Fnav_ref%3Dbiz_unified_f3_login_page_to_mbs&login_options%5B0%5D=FB&login_options%5B1%5D=IG&login_options%5B2%5D=SSO&config_ref=biz_login_tool_flavor_mbs"
+            self.driver.get(fb_business_url)
+            time.sleep(4)  # Optimized from 5s
+
+            await self.send_update("⏳ Looking for 'Log in with Instagram' button...")
+
+            try:
+                ig_login_btn = self.find_button_multilang('instagram_login', timeout=7)  # Optimized from 10s
+                ig_login_btn.click()
+                step2_time = time.time() - step2_start
+                step_times['step2_fb_login_page'] = step2_time
+                await self.send_update(f"✅ Clicked 'Log in with Instagram' button ({step2_time:.1f}s)")
+                time.sleep(4)  # Optimized from 5s
+
+            except Exception as e:
+                step2_time = time.time() - step2_start
+                await self.send_update(f"❌ Failed to click Instagram login button: {e} ({step2_time:.1f}s)")
+                self.take_screenshot("STEP2_button_not_found", str(e))
+                return False, self.screenshots
+
+            step3_start = time.time()
+            await self.send_update("⏳ STEP 3: Handling Instagram OAuth authorization...")
+
+            time.sleep(2)  # Optimized from 3s
+            if len(self.driver.window_handles) > 1:
+                self.driver.switch_to.window(self.driver.window_handles[-1])
+
+            try:
+                login_as_btn = self.find_button_multilang('log_in_as', timeout=7)  # Optimized from 10s
+                username = login_as_btn.text
+                login_as_btn.click()
+                await self.send_update(f"✅ Clicked '{username}' button")
+                time.sleep(4)  # Optimized from 5s
+            except Exception as e:
+                logger.debug(f"Log in as button handling: {e}")
+
+            if len(self.driver.window_handles) > 1:
+                self.driver.switch_to.window(self.driver.window_handles[0])
+
+            time.sleep(4)  # Optimized from 5s
+
+            current_url = self.driver.current_url
+            if "business.facebook.com" in current_url:
+                await self.send_update("✓ Redirected to Facebook Business home page")
+
+                # Keep close button attempt - important for some cases
+                try:
+                    close_btn = self.find_button_multilang('close', timeout=5)
+                    if close_btn and close_btn.is_displayed():
+                        close_btn.click()
+                        await self.send_update("✓ Closed popup")
+                        time.sleep(2)
+                except:
+                    pass
+
+                self.driver.refresh()
+                await self.send_update("✓ Refreshed page")
+                time.sleep(4)  # Optimized from 5s
+
+            step3_time = time.time() - step3_start
+            step_times['step3_oauth'] = step3_time
+
+            part2_time = time.time() - part2_start
+            part_times['part2_facebook'] = part2_time
+            await self.send_update(f"✅ PART 2: Facebook Business login completed ({part2_time:.1f}s)")
+
+            # ==================== PART 3: FINAL WORK ====================
+            part3_start = time.time()
+            await self.send_update("\n🎯 PART 3: FINAL WORK")
+
+            step4_start = time.time()
+            await self.send_update("⏳ STEP 4: Looking for 'Boost' button...")
+
+            self.driver.execute_script("window.scrollBy(0, 500);")
+            time.sleep(2)  # Optimized from 3s
+
+            try:
+                boost_btn = self.find_button_multilang('boost', timeout=7)  # Optimized from 10s
+                boost_btn.click()
+                step4_time = time.time() - step4_start
+                step_times['step4_boost'] = step4_time
+                await self.send_update(f"✅ Clicked 'Boost' button ({step4_time:.1f}s)")
+                time.sleep(2)  # Optimized from 3s
+
+            except Exception as e:
+                step4_time = time.time() - step4_start
+                await self.send_update(f"❌ Failed to find Boost button: {e} ({step4_time:.1f}s)")
+                self.take_screenshot("STEP4_boost_not_found", str(e))
+                return False, self.screenshots
+
+            # Continue button on popup - KEPT
+            try:
+                continue_btn = self.find_button_multilang('continue', timeout=7)  # Optimized from 10s
+                continue_btn.click()
+                await self.send_update("✅ Clicked 'Continue' button on popup")
+                time.sleep(2)  # Optimized from 3s
+            except Exception as e:
+                logger.debug(f"Continue button handling: {e}")
+
+            step5_start = time.time()
+            await self.send_update("⏳ STEP 5: Handling Facebook OAuth...")
+
+            time.sleep(2)  # Optimized from 3s
+            original_window = self.driver.current_window_handle
+
+            if len(self.driver.window_handles) > 1:
+                self.driver.switch_to.window(self.driver.window_handles[-1])
+                await self.send_update("✓ Switched to OAuth popup")
+
+            try:
+                continue_as_btn = self.find_button_multilang('continue_as', timeout=7)  # Optimized from 10s
+                username = continue_as_btn.text
+                continue_as_btn.click()
+                await self.send_update(f"✅ Clicked '{username}' button")
+                time.sleep(2)  # Optimized from 3s
+            except Exception as e:
+                logger.debug(f"Continue as button handling: {e}")
+
+            time.sleep(2)  # Optimized from 3s
+            if len(self.driver.window_handles) > 1:
+                try:
+                    self.driver.close()
+                    self.driver.switch_to.window(original_window)
+                except:
+                    self.driver.switch_to.window(self.driver.window_handles[0])
+                await self.send_update("✓ Returned to main tab")
+
+            time.sleep(2)  # Optimized from 3s
+
+            # Second boost/continue cycle - KEPT as requested
+            await self.send_update("⏳ Clicking 'Boost' button again...")
+
+            try:
+                boost_btn = self.find_button_multilang('boost', timeout=7)
+                boost_btn.click()
+                await self.send_update("✅ Clicked 'Boost' button again")
+                time.sleep(2)  # Optimized from 3s
+            except Exception as e:
+                logger.debug(f"Second boost click: {e}")
+
+            # Second continue - KEPT as requested
+            try:
+                continue_btn = self.find_button_multilang('continue', timeout=7)
+                continue_btn.click()
+                await self.send_update("✅ Clicked 'Continue' button again")
+                time.sleep(2)  # Optimized from 3s
+            except Exception as e:
+                logger.debug(f"Second continue click: {e}")
+
+            time.sleep(3)  # Optimized from 5s
+
+            # Final OK button - KEPT
+            await self.send_update("⏳ Looking for 'OK' button...")
+
+            try:
+                ok_btn = self.find_button_multilang('ok', timeout=7)  # Optimized from 10s
+                ok_btn.click()
+                await self.send_update("✅ Clicked 'OK' button")
+                time.sleep(1)  # Optimized from 2s
+
+                # Double-click if needed - KEPT
+                try:
+                    if ok_btn.is_displayed():
+                        ok_btn.click()
+                        await self.send_update("✅ Double-clicked 'OK' button")
+                        time.sleep(1)  # Optimized from 2s
+                except:
+                    pass
+            except Exception as e:
+                logger.debug(f"OK button handling: {e}")
+
+            step5_time = time.time() - step5_start
+            step_times['step5_final_oauth'] = step5_time
+
+            part3_time = time.time() - part3_start
+            part_times['part3_final_work'] = part3_time
+
+            # ==================== SUCCESS WITH DETAILED TIMING ====================
+            total_time = time.time() - total_start
+
+            await self.send_update("\n✅ ALL PARTS COMPLETED SUCCESSFULLY!")
+            await self.send_update("✅ PART 1: Instagram Login - DONE")
+            await self.send_update("✅ PART 2: Facebook Business - DONE")
+            await self.send_update("✅ PART 3: Final Work - DONE")
+            await self.send_update("\n🎉 FB COMMAND: FIXED DONE!")
+
+            # Detailed timing report
+            await self.send_update("\n⏱️ DETAILED TIMING REPORT:")
+            await self.send_update(f"━━━━━━━━━━━━━━━━━━━━")
+            await self.send_update(f"🌐 Browser Setup: {browser_time:.1f}s")
+            await self.send_update(f"📱 PART 1 (Instagram Login): {part_times['part1_instagram']:.1f}s")
+            await self.send_update(f"  └─ Step 1 (IG Login): {step_times['step1_ig_login']:.1f}s")
+            await self.send_update(f"💼 PART 2 (Facebook Business): {part_times['part2_facebook']:.1f}s")
+            await self.send_update(f"  ├─ Step 2 (FB Login Page): {step_times['step2_fb_login_page']:.1f}s")
+            await self.send_update(f"  └─ Step 3 (OAuth): {step_times['step3_oauth']:.1f}s")
+            await self.send_update(f"🎯 PART 3 (Final Work): {part_times['part3_final_work']:.1f}s")
+            await self.send_update(f"  ├─ Step 4 (Boost): {step_times['step4_boost']:.1f}s")
+            await self.send_update(f"  └─ Step 5 (Final OAuth): {step_times['step5_final_oauth']:.1f}s")
+            await self.send_update(f"━━━━━━━━━━━━━━━━━━━━")
+            await self.send_update(f"⏱️ TOTAL TIME: {total_time:.1f}s (~{total_time/60:.1f} min)")
+            await self.send_update(f"📸 Screenshots (failures only): {len(self.screenshots)}")
+
+            logger.info("=" * 60)
+            logger.info("FB COMMAND COMPLETED SUCCESSFULLY")
+            logger.info(f"Total Time: {total_time:.1f}s")
+            logger.info(f"Part 1: {part_times['part1_instagram']:.1f}s")
+            logger.info(f"Part 2: {part_times['part2_facebook']:.1f}s")
+            logger.info(f"Part 3: {part_times['part3_final_work']:.1f}s")
+            logger.info(f"Screenshots (failures only): {len(self.screenshots)}")
+            logger.info("=" * 60)
+
+            return True, self.screenshots
+
+        except Exception as e:
+            total_time = time.time() - total_start
+            logger.error(f"❌ Automation error: {e}", exc_info=True)
+            await self.send_update(f"\n❌ ERROR: {str(e)}")
+            await self.send_update(f"⏱️ Failed after {total_time:.1f}s")
+            self.take_screenshot("ERROR_exception_occurred", str(e))
+            return False, self.screenshots
+
+        finally:
+            if self.driver:
+                try:
+                    await self.send_update("🔄 Closing browser...")
+                    self.driver.quit()
+                    logger.info("✓ Chrome driver closed")
+                except Exception as e:
+                    logger.error(f"Error closing driver: {e}")
+

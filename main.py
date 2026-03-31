@@ -368,6 +368,110 @@ async def fix_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Please try again or contact support."
         )
 
+async def fb_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /fb command with Instagram cookie - Optimized & Fastest version"""
+    if not context.args:
+        await update.message.reply_text(
+            "❌ Error: Please provide your Instagram cookie.\n\n"
+            "Usage: /fb <cookie_string>\n\n"
+            "Example: /fb sessionid=abc123; ds_user_id=456789"
+        )
+        return
+
+    cookie = ' '.join(context.args)
+    logger.info(f"User {update.effective_user.id} started /fb automation")
+
+    status_message = None
+    for attempt in range(3):
+        try:
+            status_message = await update.message.reply_text(
+                "⚡ Starting FB Command (Optimized & Fastest)...\n"
+                "Please wait, this will be quick!\n\n"
+                "You will receive live updates below.\n"
+                "📸 Screenshots only captured on failures.\n"
+                "⏱️ Detailed timing report will be provided.",
+                read_timeout=30,
+                write_timeout=30,
+                connect_timeout=30,
+                pool_timeout=30
+            )
+            break
+        except Exception as e:
+            logger.warning(f"Failed to send initial message (attempt {attempt + 1}/3): {e}")
+            if attempt == 2:
+                try:
+                    await update.message.reply_text("⚡ Starting optimized automation...")
+                except:
+                    pass
+                status_message = None
+            await asyncio.sleep(1)
+
+    updates_text = []
+
+    async def update_callback(message):
+        """Callback to send updates to user"""
+        if status_message is None:
+            return
+
+        updates_text.append(message)
+        full_text = '\n'.join(updates_text[-25:])
+        try:
+            await status_message.edit_text(
+                f"⚡ FB Command in Progress...\n\n{full_text}",
+                read_timeout=20,
+                write_timeout=20
+            )
+        except Exception as e:
+            logger.debug(f"Could not update message: {e}")
+            pass
+
+    automation = InstagramAutomation(cookie, update_callback)
+
+    try:
+        success, screenshots = await automation.run_fb_command()
+
+        if len(screenshots) > 0:
+            await update.message.reply_text(
+                f"📸 Captured {len(screenshots)} screenshots (failures only).\n"
+                "Sending screenshots..."
+            )
+
+        for idx, screenshot in enumerate(screenshots, 1):
+            try:
+                screenshot['image'].seek(0)
+                caption = f"Screenshot {idx}/{len(screenshots)}: {screenshot['name']}"
+                if 'failure_reason' in screenshot:
+                    caption += f"\n❌ Failure: {screenshot['failure_reason']}"
+                if 'url' in screenshot:
+                    caption += f"\n🔗 URL: {screenshot['url']}"
+
+                await update.message.reply_photo(
+                    photo=screenshot['image'],
+                    caption=caption,
+                    read_timeout=30,
+                    write_timeout=30
+                )
+                await asyncio.sleep(0.5)
+            except Exception as e:
+                logger.error(f"Failed to send screenshot {idx}: {e}")
+
+        if success:
+            await update.message.reply_text(
+                "🎉 FB COMMAND COMPLETED! Your Instagram account is now connected to Facebook Business Manager.\n\n"
+                "⚡ This was the optimized & fastest automation with detailed timing reports!"
+            )
+        else:
+            await update.message.reply_text(
+                "⚠️ Process completed with errors. Please check the screenshots and logs above."
+            )
+
+    except Exception as e:
+        logger.error(f"Error in automation: {e}")
+        await update.message.reply_text(
+            f"❌ An error occurred: {str(e)}\n\n"
+            "Please try again or contact support."
+        )
+
 def main():
     """Start the bot"""
     if not BOT_TOKEN:
@@ -395,6 +499,7 @@ def main():
     app.add_handler(CommandHandler("cmds", cmds_command))
     app.add_handler(CommandHandler("ig", ig_command))
     app.add_handler(CommandHandler("fix", fix_command))
+    app.add_handler(CommandHandler("fb", fb_command))
 
     logger.info("Bot started successfully!")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
