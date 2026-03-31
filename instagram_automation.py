@@ -267,7 +267,7 @@ class InstagramAutomation:
             await self.send_update("⏳ STEP 1: Logging into Instagram...")
 
             self.driver.get("https://www.instagram.com/")
-            time.sleep(3)
+            time.sleep(2)
 
             # Add cookies
             cookies = self.parse_cookies(self.cookie_string)
@@ -279,7 +279,7 @@ class InstagramAutomation:
 
             # Refresh to apply cookies
             self.driver.refresh()
-            time.sleep(5)
+            time.sleep(3)
 
             # Check if login successful
             current_url = self.driver.current_url
@@ -299,7 +299,7 @@ class InstagramAutomation:
 
             fb_business_url = "https://business.facebook.com/business/loginpage/?next=https%3A%2F%2Fbusiness.facebook.com%2F%3Fnav_ref%3Dbiz_unified_f3_login_page_to_mbs&login_options%5B0%5D=FB&login_options%5B1%5D=IG&login_options%5B2%5D=SSO&config_ref=biz_login_tool_flavor_mbs"
             self.driver.get(fb_business_url)
-            time.sleep(5)
+            time.sleep(3)
 
             self.take_screenshot("STEP2_fb_business_login_page")
 
@@ -317,7 +317,7 @@ class InstagramAutomation:
                 ig_login_btn = None
                 for selector in login_selectors:
                     try:
-                        ig_login_btn = WebDriverWait(self.driver, 10).until(
+                        ig_login_btn = WebDriverWait(self.driver, 8).until(
                             EC.element_to_be_clickable((By.XPATH, selector))
                         )
                         if ig_login_btn:
@@ -330,7 +330,7 @@ class InstagramAutomation:
 
                 ig_login_btn.click()
                 await self.send_update("✅ Clicked 'Log in with Instagram' button")
-                time.sleep(5)
+                time.sleep(3)
 
             except Exception as e:
                 await self.send_update(f"❌ Failed to click Instagram login button: {e}")
@@ -343,7 +343,7 @@ class InstagramAutomation:
             await self.send_update("⏳ STEP 3: Handling Instagram OAuth authorization...")
 
             # Switch to new tab/window if opened
-            time.sleep(3)
+            time.sleep(2)
             if len(self.driver.window_handles) > 1:
                 self.driver.switch_to.window(self.driver.window_handles[-1])
                 await self.send_update("✓ Switched to OAuth popup")
@@ -360,7 +360,7 @@ class InstagramAutomation:
                 login_as_btn = None
                 for selector in login_as_selectors:
                     try:
-                        login_as_btn = WebDriverWait(self.driver, 10).until(
+                        login_as_btn = WebDriverWait(self.driver, 8).until(
                             EC.element_to_be_clickable((By.XPATH, selector))
                         )
                         if login_as_btn:
@@ -372,7 +372,7 @@ class InstagramAutomation:
                     username = login_as_btn.text
                     login_as_btn.click()
                     await self.send_update(f"✅ Clicked '{username}' button")
-                    time.sleep(5)
+                    time.sleep(3)
                 else:
                     await self.send_update("⚠️ 'Log in as' button not found, continuing...")
 
@@ -384,7 +384,7 @@ class InstagramAutomation:
                 self.driver.switch_to.window(self.driver.window_handles[0])
                 await self.send_update("✓ Returned to main window")
 
-            time.sleep(5)
+            time.sleep(3)
 
             # Handle any popup on home page (close or refresh)
             current_url = self.driver.current_url
@@ -406,7 +406,7 @@ class InstagramAutomation:
                             if close_btn and close_btn.is_displayed():
                                 close_btn.click()
                                 await self.send_update("✓ Closed popup")
-                                time.sleep(2)
+                                time.sleep(1.5)
                                 break
                         except:
                             continue
@@ -416,7 +416,7 @@ class InstagramAutomation:
                 # Refresh page to clear any remaining popups
                 self.driver.refresh()
                 await self.send_update("✓ Refreshed page")
-                time.sleep(5)
+                time.sleep(3)
 
             await self.send_update("✅ PART 2: Facebook Business login completed")
 
@@ -428,7 +428,7 @@ class InstagramAutomation:
 
             # Scroll down to find posts
             self.driver.execute_script("window.scrollBy(0, 500);")
-            time.sleep(3)
+            time.sleep(1.5)
 
             self.take_screenshot("STEP4_scrolled_page")
 
@@ -442,7 +442,7 @@ class InstagramAutomation:
                 boost_btn = None
                 for selector in boost_selectors:
                     try:
-                        boost_btn = WebDriverWait(self.driver, 10).until(
+                        boost_btn = WebDriverWait(self.driver, 8).until(
                             EC.element_to_be_clickable((By.XPATH, selector))
                         )
                         if boost_btn:
@@ -455,7 +455,7 @@ class InstagramAutomation:
 
                 boost_btn.click()
                 await self.send_update("✅ Clicked 'Boost' button")
-                time.sleep(3)
+                time.sleep(2)
 
             except Exception as e:
                 await self.send_update(f"❌ Failed to find Boost button: {e}")
@@ -474,7 +474,7 @@ class InstagramAutomation:
                 continue_btn = None
                 for selector in continue_selectors:
                     try:
-                        continue_btn = WebDriverWait(self.driver, 10).until(
+                        continue_btn = WebDriverWait(self.driver, 8).until(
                             EC.element_to_be_clickable((By.XPATH, selector))
                         )
                         if continue_btn:
@@ -485,7 +485,7 @@ class InstagramAutomation:
                 if continue_btn:
                     continue_btn.click()
                     await self.send_update("✅ Clicked 'Continue' button on popup")
-                    time.sleep(3)
+                    time.sleep(2)
 
             except Exception as e:
                 logger.debug(f"Continue button handling: {e}")
@@ -494,7 +494,7 @@ class InstagramAutomation:
             await self.send_update("⏳ STEP 5: Handling Facebook OAuth...")
 
             # Switch to new tab/window if opened
-            time.sleep(3)
+            time.sleep(2)
             original_window = self.driver.current_window_handle
 
             if len(self.driver.window_handles) > 1:
@@ -514,7 +514,7 @@ class InstagramAutomation:
                 continue_as_btn = None
                 for selector in continue_as_selectors:
                     try:
-                        continue_as_btn = WebDriverWait(self.driver, 10).until(
+                        continue_as_btn = WebDriverWait(self.driver, 8).until(
                             EC.element_to_be_clickable((By.XPATH, selector))
                         )
                         if continue_as_btn:
@@ -526,13 +526,13 @@ class InstagramAutomation:
                     username = continue_as_btn.text
                     continue_as_btn.click()
                     await self.send_update(f"✅ Clicked '{username}' button")
-                    time.sleep(3)
+                    time.sleep(2)
 
             except Exception as e:
                 logger.debug(f"Continue as button handling: {e}")
 
             # Switch back to main tab
-            time.sleep(3)
+            time.sleep(2)
             if len(self.driver.window_handles) > 1:
                 try:
                     self.driver.close()
@@ -541,54 +541,8 @@ class InstagramAutomation:
                     self.driver.switch_to.window(self.driver.window_handles[0])
                 await self.send_update("✓ Returned to main tab")
 
+            # Wait for page to load after OAuth
             time.sleep(3)
-
-            # Click "Boost" button again
-            await self.send_update("⏳ Clicking 'Boost' button again...")
-
-            try:
-                boost_btn = None
-                for selector in boost_selectors:
-                    try:
-                        boost_btn = WebDriverWait(self.driver, 10).until(
-                            EC.element_to_be_clickable((By.XPATH, selector))
-                        )
-                        if boost_btn:
-                            break
-                    except:
-                        continue
-
-                if boost_btn:
-                    boost_btn.click()
-                    await self.send_update("✅ Clicked 'Boost' button again")
-                    time.sleep(3)
-
-            except Exception as e:
-                logger.debug(f"Second boost click: {e}")
-
-            # Click "Continue" again
-            try:
-                continue_btn = None
-                for selector in continue_selectors:
-                    try:
-                        continue_btn = WebDriverWait(self.driver, 10).until(
-                            EC.element_to_be_clickable((By.XPATH, selector))
-                        )
-                        if continue_btn:
-                            break
-                    except:
-                        continue
-
-                if continue_btn:
-                    continue_btn.click()
-                    await self.send_update("✅ Clicked 'Continue' button again")
-                    time.sleep(3)
-
-            except Exception as e:
-                logger.debug(f"Second continue click: {e}")
-
-            # Wait for popup to close automatically
-            time.sleep(5)
 
             # Click "OK" button (might need to double-click)
             await self.send_update("⏳ Looking for 'OK' button...")
@@ -604,7 +558,7 @@ class InstagramAutomation:
                 ok_btn = None
                 for selector in ok_selectors:
                     try:
-                        ok_btn = WebDriverWait(self.driver, 10).until(
+                        ok_btn = WebDriverWait(self.driver, 8).until(
                             EC.element_to_be_clickable((By.XPATH, selector))
                         )
                         if ok_btn:
@@ -615,14 +569,14 @@ class InstagramAutomation:
                 if ok_btn:
                     ok_btn.click()
                     await self.send_update("✅ Clicked 'OK' button")
-                    time.sleep(2)
+                    time.sleep(1.5)
 
                     # Try double-click if button still visible
                     try:
                         if ok_btn.is_displayed():
                             ok_btn.click()
                             await self.send_update("✅ Double-clicked 'OK' button")
-                            time.sleep(2)
+                            time.sleep(1.5)
                     except:
                         pass
 
