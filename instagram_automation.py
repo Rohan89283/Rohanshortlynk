@@ -942,6 +942,10 @@ class InstagramAutomation:
             await self.send_update("⏳ STEP 3: Handling Instagram OAuth authorization...")
 
             time.sleep(1)  # Brief wait for popup to appear
+
+            # Store the main window handle before switching
+            main_window = self.driver.current_window_handle
+
             if len(self.driver.window_handles) > 1:
                 self.driver.switch_to.window(self.driver.window_handles[-1])
                 await self.send_update("✓ Switched to OAuth popup")
@@ -955,9 +959,14 @@ class InstagramAutomation:
                 logger.debug(f"Log in as button handling: {e}")
 
             # SMART SWITCH: Go back to main tab immediately and wait for URL redirect
-            if len(self.driver.window_handles) > 1:
-                self.driver.switch_to.window(self.driver.window_handles[0])
+            # Ensure we switch to the correct main window
+            try:
+                self.driver.switch_to.window(main_window)
                 await self.send_update("✓ Switched back to main tab")
+            except:
+                # If main window is gone, switch to first available
+                if len(self.driver.window_handles) > 0:
+                    self.driver.switch_to.window(self.driver.window_handles[0])
 
             # Smart wait for redirect to business.facebook.com
             await self.send_update("⏳ Waiting for redirect to Facebook Business...")
@@ -974,11 +983,19 @@ class InstagramAutomation:
                         await self.send_update(f"✅ Redirected to Facebook Business ({elapsed:.1f}s)")
                         break
                     time.sleep(0.5)  # Poll every 500ms
-                except:
+                except Exception as e:
+                    logger.debug(f"URL check error: {e}")
                     time.sleep(0.5)
 
             if not redirected:
                 await self.send_update("⚠️ Redirect took longer than expected, continuing...")
+
+            # Ensure we're on the main window before proceeding
+            try:
+                if len(self.driver.window_handles) > 0:
+                    self.driver.switch_to.window(self.driver.window_handles[0])
+            except:
+                pass
 
             # Smart wait for page to be interactive
             time.sleep(1)
@@ -990,13 +1007,17 @@ class InstagramAutomation:
                     close_btn.click()
                     await self.send_update("✓ Closed popup")
                     time.sleep(1)
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Close button handling: {e}")
 
-            # Refresh and wait for page load
-            self.driver.refresh()
-            await self.send_update("✓ Refreshed page")
-            time.sleep(2)  # Smart wait for page elements
+            # Refresh and wait for page load - with error handling
+            try:
+                self.driver.refresh()
+                await self.send_update("✓ Refreshed page")
+                time.sleep(2)  # Smart wait for page elements
+            except Exception as e:
+                logger.debug(f"Refresh error: {e}")
+                await self.send_update("✓ Page already loaded")
 
             step3_time = time.time() - step3_start
             step_times['step3_oauth'] = step3_time
@@ -1042,11 +1063,18 @@ class InstagramAutomation:
             await self.send_update("⏳ STEP 5: Handling Facebook OAuth...")
 
             time.sleep(1)  # Brief wait for popup
-            original_window = self.driver.current_window_handle
+
+            try:
+                original_window = self.driver.current_window_handle
+            except:
+                original_window = None
 
             if len(self.driver.window_handles) > 1:
-                self.driver.switch_to.window(self.driver.window_handles[-1])
-                await self.send_update("✓ Switched to OAuth popup")
+                try:
+                    self.driver.switch_to.window(self.driver.window_handles[-1])
+                    await self.send_update("✓ Switched to OAuth popup")
+                except Exception as e:
+                    logger.debug(f"Window switch error: {e}")
 
             try:
                 continue_as_btn = self.find_button_multilang('continue_as', timeout=7)
@@ -1057,15 +1085,22 @@ class InstagramAutomation:
             except Exception as e:
                 logger.debug(f"Continue as button handling: {e}")
 
-            # Smart tab switching
+            # Smart tab switching with better error handling
             time.sleep(1)
             if len(self.driver.window_handles) > 1:
                 try:
                     self.driver.close()
-                    self.driver.switch_to.window(original_window)
-                except:
-                    self.driver.switch_to.window(self.driver.window_handles[0])
-                await self.send_update("✓ Returned to main tab")
+                    if original_window:
+                        self.driver.switch_to.window(original_window)
+                    else:
+                        self.driver.switch_to.window(self.driver.window_handles[0])
+                    await self.send_update("✓ Returned to main tab")
+                except Exception as e:
+                    logger.debug(f"Tab switch error: {e}")
+                    try:
+                        self.driver.switch_to.window(self.driver.window_handles[0])
+                    except:
+                        pass
 
             time.sleep(1)
 
