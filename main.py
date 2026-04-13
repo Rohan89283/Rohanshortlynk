@@ -669,4 +669,526 @@ async def id_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"ID: <code>{tg_user.id}</code>\n"
         f"Status: <b>{esc(user_status_label(tg_user.id))}</b>\n"
         f"Banned: <b>{esc(u.get('banned', False))}</b>\n"
-        f"CHK Access: <b>{esc(u.
+        f"CHK Access: <b>{esc(u.get('permissions', {}).get('chk', False))}</b>"
+    )
+
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+
+
+async def ping_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    t0 = time.perf_counter()
+    msg = await update.message.reply_text("🏓 <b>Checking...</b>", parse_mode=ParseMode.HTML)
+    latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+    uptime = fmt_uptime(time.time() - APP_START_TS)
+
+    text = (
+        "🏓 <b>Pong</b>\n\n"
+        f"Latency: <b>{latency_ms} ms</b>\n"
+        f"Uptime: <b>{esc(uptime)}</b>"
+    )
+    await msg.edit_text(text, parse_mode=ParseMode.HTML)
+
+
+# =========================================================
+# PREMIUM COMMAND
+# =========================================================
+async def chk_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    tg_user = update.effective_user
+    ensure_user(tg_user.id, tg_user)
+
+    if not has_permission(tg_user.id, "chk"):
+        await update.message.reply_text(
+            "❌ <b>You do not have access to /chk.</b>\n\nAsk an admin to approve you.",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    usernames: List[str] = []
+
+    if context.args:
+        for raw in context.args:
+            cleaned = clean_username_line(raw)
+            if cleaned:
+                usernames.append(cleaned)
+
+    replied_doc = update.message.reply_to_message.document if update.message.reply_to_message else None
+    if replied_doc:
+        if not replied_doc.file_name.lower().endswith(".txt"):
+            await update.message.reply_text(
+                "⚠️ <b>Reply to a .txt file only.</b>",
+                parse_mode=ParseMode.HTML,
+            )
+            return
+
+        tg_file = await replied_doc.get_file()
+        data = await tg_file.download_as_bytearray()
+
+        try:
+            file_text = data.decode("utf-8", errors="ignore")
+        except Exception:
+            file_text = data.decode(errors="ignore")
+
+        for line in file_text.splitlines():
+            cleaned = clean_username_line(line)
+            if cleaned:
+                usernames.append(cleaned)
+
+    usernames = unique_keep_order(usernames)
+
+    if not usernames:
+        await update.message.reply_text(
+            "⚠️ <b>No valid usernames found.</b>\n\nUse:\n<code>/chk username</code>\nor reply to a .txt file.",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    use_proxy = is_proxy_enabled_for("chk")
+
+    progress_msg = await update.message.reply_text(
+        panel(
+            "Username Check Started",
+            f"Usernames: <b>{len(usernames)}</b>\n"
+            f"Proxy for /chk: <b>{use_proxy}</b>\n"
+            f"Retries per username: <b>{CHK_RETRIES}</b>"
+        ),
+        parse_mode=ParseMode.HTML,
+    )
+
+    t0 = time.time()
+
+    results, exists, not_exists, errors = await run_mass_check(usernames, use_proxy)
+
+    took = round(time.time() - t0, 2)
+    session_id = make_result_session(
+        tg_user.id,
+        exists,
+        not_exists,
+        results,
+    )
+
+    preview_lines = results[:RESULT_PREVIEW_LIMIT]
+    preview_html = "<code>" + esc("\n".join(preview_lines)) + "</code>"
+
+    if len(results) > RESULT_PREVIEW_LIMIT:
+        preview_html += f"\n\n…and <b>{len(results) - RESULT_PREVIEW_LIMIT}</b> more."
+
+    summary = (
+        f"{preview_html}\n\n"
+        f"Total: <b>{len(usernames)}</b>\n"
+        f"Exists: <b>{len(exists)}</b>\n"
+        f"Not Exist: <b>{len(not_exists)}</b>\n"
+        f"Errors: <b>{len(errors)}</b>\n"
+        f"Time: <b>{took}s</b>"
+    )
+
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📄 Exists TXT", callback_data=f"chkdl:{session_id}:ex"),
+            InlineKeyboardButton("📄 Not Exist TXT", callback_data=f"chkdl:{session_id}:no"),
+        ],
+        [
+            InlineKeyboardButton("📄 All Results TXT", callback_data=f"chkdl:{session_id}:all"),
+        ]
+    ])
+
+    await progress_msg.edit_text(
+        panel("Check Results", summary),
+        parse_mode=ParseMode.HTML,
+        reply_markup=kb,
+    )
+
+
+# =========================================================
+# ADMIN COMMANDS
+# =========================================================
+async def approve_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        return await update.message.reply_text(admin_only_text(), parse_mode=ParseMode.HTML)
+
+    uid = parse_user_id_arg(context.args)
+    if not uid:
+        return await update.message.reply_text(
+            "⚠️ <b>Usage:</b> <code>/approve 123456789 chk</code>\n"
+            "or\n<code>/approve 123456789 all</code>",
+            parse_mode=ParseMode.HTML,
+        )
+
+    perm = "chk"
+    if len(context.args) > 1:
+        perm = context.args[1].strip().lower()
+
+    if perm not in ("chk", "all"):
+        return await update.message.reply_text("⚠️ Permission must be: chk or all")
+
+    if perm == "all":
+        set_permission(uid, "chk", True)
+        msg = f"✅ Approved all available permissions for <code>{uid}</code>"
+    else:
+        set_permission(uid, "chk", True)
+        msg = f"✅ Approved <b>/chk</b> for <code>{uid}</code>"
+
+    await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+
+
+async def revoke_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        return await update.message.reply_text(admin_only_text(), parse_mode=ParseMode.HTML)
+
+    uid = parse_user_id_arg(context.args)
+    if not uid:
+        return await update.message.reply_text(
+            "⚠️ <b>Usage:</b> <code>/revoke 123456789 chk</code>\n"
+            "or\n<code>/revoke 123456789 all</code>",
+            parse_mode=ParseMode.HTML,
+        )
+
+    perm = "chk"
+    if len(context.args) > 1:
+        perm = context.args[1].strip().lower()
+
+    if perm not in ("chk", "all"):
+        return await update.message.reply_text("⚠️ Permission must be: chk or all")
+
+    if perm == "all":
+        set_permission(uid, "chk", False)
+        msg = f"❌ Revoked all available permissions for <code>{uid}</code>"
+    else:
+        set_permission(uid, "chk", False)
+        msg = f"❌ Revoked <b>/chk</b> for <code>{uid}</code>"
+
+    await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+
+
+async def ban_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        return await update.message.reply_text(admin_only_text(), parse_mode=ParseMode.HTML)
+
+    uid = parse_user_id_arg(context.args)
+    if not uid:
+        return await update.message.reply_text(
+            "⚠️ <b>Usage:</b> <code>/ban 123456789</code>",
+            parse_mode=ParseMode.HTML,
+        )
+
+    set_ban(uid, True)
+    await update.message.reply_text(
+        f"🚫 Banned user <code>{uid}</code>",
+        parse_mode=ParseMode.HTML,
+    )
+
+
+async def unban_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        return await update.message.reply_text(admin_only_text(), parse_mode=ParseMode.HTML)
+
+    uid = parse_user_id_arg(context.args)
+    if not uid:
+        return await update.message.reply_text(
+            "⚠️ <b>Usage:</b> <code>/unban 123456789</code>",
+            parse_mode=ParseMode.HTML,
+        )
+
+    set_ban(uid, False)
+    await update.message.reply_text(
+        f"✅ Unbanned user <code>{uid}</code>",
+        parse_mode=ParseMode.HTML,
+    )
+
+
+async def ram_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        return await update.message.reply_text(admin_only_text(), parse_mode=ParseMode.HTML)
+
+    vm = psutil.virtual_memory()
+    disk = shutil.disk_usage(BASE_DIR)
+    uptime = fmt_uptime(time.time() - APP_START_TS)
+
+    body = (
+        f"Uptime: <b>{esc(uptime)}</b>\n\n"
+        f"RAM Total: <b>{vm.total // (1024 * 1024)} MB</b>\n"
+        f"RAM Used: <b>{vm.used // (1024 * 1024)} MB</b>\n"
+        f"RAM Free: <b>{vm.available // (1024 * 1024)} MB</b>\n"
+        f"RAM Percent: <b>{vm.percent}%</b>\n\n"
+        f"Disk Total: <b>{disk.total // (1024 * 1024 * 1024)} GB</b>\n"
+        f"Disk Used: <b>{disk.used // (1024 * 1024 * 1024)} GB</b>\n"
+        f"Disk Free: <b>{disk.free // (1024 * 1024 * 1024)} GB</b>"
+    )
+
+    await update.message.reply_text(panel("System Status", body), parse_mode=ParseMode.HTML)
+
+
+async def cleanram_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        return await update.message.reply_text(admin_only_text(), parse_mode=ParseMode.HTML)
+
+    removed = 0
+    for p in TMP_DIR.glob("*"):
+        try:
+            if p.is_file():
+                p.unlink()
+                removed += 1
+            elif p.is_dir():
+                shutil.rmtree(p, ignore_errors=True)
+                removed += 1
+        except Exception as e:
+            logger.exception("Failed removing temp %s: %s", p, e)
+
+    gc.collect()
+
+    await update.message.reply_text(
+        panel(
+            "Cleanup Complete",
+            f"Removed temp entries: <b>{removed}</b>\n"
+            f"Garbage collection executed."
+        ),
+        parse_mode=ParseMode.HTML,
+    )
+
+
+async def log_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        return await update.message.reply_text(admin_only_text(), parse_mode=ParseMode.HTML)
+
+    if not BOT_LOG_FILE.exists():
+        return await update.message.reply_text("No log file found.")
+
+    await update.message.reply_document(
+        document=InputFile(str(BOT_LOG_FILE)),
+        caption="📝 <b>Bot log file</b>",
+        parse_mode=ParseMode.HTML,
+    )
+
+
+async def backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        return await update.message.reply_text(admin_only_text(), parse_mode=ParseMode.HTML)
+
+    zip_path = create_backup_zip()
+
+    await update.message.reply_document(
+        document=InputFile(str(zip_path)),
+        caption="📦 <b>Backup created</b>\n\nIncludes JSON, log, main.py, requirements.txt, Dockerfile",
+        parse_mode=ParseMode.HTML,
+    )
+
+
+async def restore_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        return await update.message.reply_text(admin_only_text(), parse_mode=ParseMode.HTML)
+
+    replied = update.message.reply_to_message
+    if not replied or not replied.document:
+        return await update.message.reply_text(
+            "⚠️ Reply to <b>users.json</b>, <b>proxies.json</b>, <b>settings.json</b>, or a backup zip.",
+            parse_mode=ParseMode.HTML,
+        )
+
+    doc = replied.document
+    tg_file = await doc.get_file()
+    data = await tg_file.download_as_bytearray()
+
+    result = await restore_from_document(data, doc.file_name)
+    await update.message.reply_text(panel("Restore Result", esc(result)), parse_mode=ParseMode.HTML)
+
+
+async def proxy_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        return await update.message.reply_text(admin_only_text(), parse_mode=ParseMode.HTML)
+
+    args = context.args
+
+    if not args:
+        chk_status = is_proxy_enabled_for("chk")
+        total = len(get_all_proxies())
+
+        kb = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("Enable /chk Proxy", callback_data="proxy:chk:on"),
+                InlineKeyboardButton("Disable /chk Proxy", callback_data="proxy:chk:off"),
+            ],
+            [
+                InlineKeyboardButton("Export Proxies TXT", callback_data="proxy:export"),
+            ],
+        ])
+
+        text = (
+            f"🌐 <b>Proxy Panel</b>\n\n"
+            f"/chk proxy enabled: <b>{chk_status}</b>\n"
+            f"Total proxies: <b>{total}</b>\n\n"
+            f"<b>Command usage:</b>\n"
+            f"<code>/proxy add host:port:user:pass</code>\n"
+            f"<code>/proxy del host:port:user:pass</code>\n"
+            f"<code>/proxy list</code>\n"
+            f"<code>/proxy on</code>\n"
+            f"<code>/proxy off</code>"
+        )
+        return await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+
+    sub = args[0].lower()
+
+    if sub == "on":
+        set_command_proxy_enabled("chk", True)
+        return await update.message.reply_text("✅ Proxy enabled for /chk")
+
+    if sub == "off":
+        set_command_proxy_enabled("chk", False)
+        return await update.message.reply_text("✅ Proxy disabled for /chk")
+
+    if sub == "add":
+        if len(args) < 2:
+            return await update.message.reply_text("⚠️ Usage: /proxy add host:port:user:pass")
+        ok, msg = add_proxy_line(args[1])
+        return await update.message.reply_text(("✅ " if ok else "❌ ") + msg)
+
+    if sub == "del":
+        if len(args) < 2:
+            return await update.message.reply_text("⚠️ Usage: /proxy del host:port:user:pass")
+        ok, msg = delete_proxy_value(args[1])
+        return await update.message.reply_text(("✅ " if ok else "❌ ") + msg)
+
+    if sub == "list":
+        items = get_all_proxies()
+        if not items:
+            return await update.message.reply_text("No proxies saved.")
+
+        preview = items[:20]
+        body = "<code>" + esc("\n".join(preview)) + "</code>"
+        if len(items) > 20:
+            body += f"\n\n…and <b>{len(items) - 20}</b> more."
+
+        return await update.message.reply_text(panel("Proxy List", body), parse_mode=ParseMode.HTML)
+
+    await update.message.reply_text("⚠️ Unknown proxy subcommand.")
+
+
+# =========================================================
+# CALLBACKS
+# =========================================================
+async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    if not q:
+        return
+
+    data = q.data or ""
+
+    # /chk file download callbacks
+    if data.startswith("chkdl:"):
+        await q.answer()
+        parts = data.split(":")
+        if len(parts) != 3:
+            return await q.message.reply_text("Invalid callback data.")
+
+        _, session_id, mode = parts
+        session = RESULT_SESSIONS.get(session_id)
+        if not session:
+            return await q.message.reply_text("This result session expired or does not exist.")
+
+        if q.from_user.id != session["owner_id"] and not is_admin(q.from_user.id):
+            return await q.message.reply_text("You cannot access another user's result files.")
+
+        if mode == "ex":
+            return await q.message.reply_document(InputFile(session["exists_file"]))
+        if mode == "no":
+            return await q.message.reply_document(InputFile(session["not_exists_file"]))
+        if mode == "all":
+            return await q.message.reply_document(InputFile(session["all_file"]))
+
+        return
+
+    # proxy panel callbacks
+    if data.startswith("proxy:"):
+        if not is_admin(q.from_user.id):
+            await q.answer("Admin only.", show_alert=True)
+            return
+
+        await q.answer()
+        parts = data.split(":")
+        if len(parts) < 2:
+            return
+
+        action = parts[1]
+
+        if action == "chk" and len(parts) == 4:
+            mode = parts[3]
+            set_command_proxy_enabled("chk", mode == "on")
+            return await q.message.reply_text(
+                f"✅ /chk proxy set to: <b>{mode == 'on'}</b>",
+                parse_mode=ParseMode.HTML,
+            )
+
+        if action == "export":
+            items = get_all_proxies()
+            if not items:
+                return await q.message.reply_text("No proxies saved.")
+
+            export_path = TMP_DIR / "proxies_export.txt"
+            write_text_file(export_path, items)
+            return await q.message.reply_document(InputFile(str(export_path)))
+
+        return
+
+
+# =========================================================
+# ERROR HANDLER
+# =========================================================
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    logger.exception("Unhandled error: %s", context.error)
+
+    try:
+        if isinstance(update, Update) and update.effective_message:
+            await update.effective_message.reply_text(
+                "⚠️ <b>An internal error occurred.</b>\nPlease try again.",
+                parse_mode=ParseMode.HTML,
+            )
+    except Exception:
+        pass
+
+
+# =========================================================
+# MAIN
+# =========================================================
+def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # basic
+    app.add_handler(CommandHandler("start", start_cmd))
+    app.add_handler(CommandHandler("cmds", cmds_cmd))
+    app.add_handler(CommandHandler("help", help_cmd))
+    app.add_handler(CommandHandler("id", id_cmd))
+    app.add_handler(CommandHandler("ping", ping_cmd))
+
+    # premium
+    app.add_handler(CommandHandler("chk", chk_cmd))
+
+    # admin
+    app.add_handler(CommandHandler("approve", approve_cmd))
+    app.add_handler(CommandHandler("revoke", revoke_cmd))
+    app.add_handler(CommandHandler("ban", ban_cmd))
+    app.add_handler(CommandHandler("unban", unban_cmd))
+    app.add_handler(CommandHandler("ram", ram_cmd))
+    app.add_handler(CommandHandler("cleanram", cleanram_cmd))
+    app.add_handler(CommandHandler("log", log_cmd))
+    app.add_handler(CommandHandler("backup", backup_cmd))
+    app.add_handler(CommandHandler("restore", restore_cmd))
+    app.add_handler(CommandHandler("proxy", proxy_cmd))
+
+    # callbacks
+    app.add_handler(CallbackQueryHandler(callback_router))
+
+    # errors
+    app.add_error_handler(error_handler)
+
+    # auto backup every 48h
+    if app.job_queue is not None:
+        app.job_queue.run_repeating(
+            auto_send_users_backup,
+            interval=172800,
+            first=60,
+        )
+
+    logger.info("🚀 Bot Running")
+    app.run_polling(drop_pending_updates=True)
+
+
+if __name__ == "__main__":
+    main()
