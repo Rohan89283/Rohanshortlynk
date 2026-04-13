@@ -51,7 +51,6 @@ if not ADMIN_IDS:
 USER_DATA_FILE = "user_data.json"
 PROXY_CONFIG_FILE = "proxy_config.json"
 LOG_FILE = "bot.log"
-BACKUP_DIR = Path("backups")
 BACKUP_INTERVAL_HOURS = 48
 
 # Default proxy config
@@ -180,7 +179,7 @@ def admin_only(func):
 
 
 # ------------------------------
-# Instagram Checker Logic
+# Instagram Checker Logic (concurrent with retries)
 # ------------------------------
 async def check_single_username(
     username: str,
@@ -200,6 +199,7 @@ async def check_single_username(
                 url, headers=headers, timeout=CHECK_TIMEOUT, proxy=proxy
             ) as resp:
                 html = await resp.text()
+                # Core detection logic (same as your Termux script)
                 if f'rel="alternate" href="https://www.instagram.com/{username}/"' in html:
                     return username, "EXISTS"
                 else:
@@ -315,7 +315,7 @@ async def send_check_results(
     usernames: List[str],
     results: Dict[str, str],
     start_time_check: float,
-    context: ContextTypes.DEFAULT_TYPE,
+    context: ContextTypes.DEFAULT_TYPE,   # <-- FIXED: added context parameter
 ):
     total = len(usernames)
     exist = sum(1 for s in results.values() if s == "EXISTS")
@@ -357,8 +357,8 @@ async def send_check_results(
         [InlineKeyboardButton("📥 Existing only (txt)", callback_data="dl_exist"),
          InlineKeyboardButton("📥 Non-existing only (txt)", callback_data="dl_notexist")]
     ])
+    # Store results for download callback
     context.user_data["last_check_results"] = results
-    context.user_data["last_check_usernames"] = usernames
     await update.message.reply_text("📎 *Download clean lists:*", reply_markup=keyboard, parse_mode="Markdown")
 
 async def handle_download_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -393,7 +393,7 @@ async def cmd_chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     start_time_check = time.time()
     usernames = []
 
-    # Reply to .txt file
+    # Handle file reply
     if update.message.reply_to_message and update.message.reply_to_message.document:
         doc = update.message.reply_to_message.document
         if doc.mime_type == "text/plain" or doc.file_name.endswith(".txt"):
@@ -689,7 +689,7 @@ async def handle_proxy_text_input(update: Update, context: ContextTypes.DEFAULT_
 # ------------------------------
 # Automatic Backup Task (every 48h)
 # ------------------------------
-async def auto_backup(app: Application):
+async def auto_backup(app: Application):   # <-- FIXED: accept app instead of context
     while True:
         await asyncio.sleep(BACKUP_INTERVAL_HOURS * 3600)
         backup_data = {
@@ -711,14 +711,14 @@ async def auto_backup(app: Application):
 
 
 # ------------------------------
-# Main
+# Main (stable polling)
 # ------------------------------
 async def post_init(app: Application):
     """Start auto backup after app is initialized."""
     asyncio.create_task(auto_backup(app))
 
 def main():
-    # Load data
+    # Load data synchronously (required before building app)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(load_user_data())
@@ -755,7 +755,7 @@ def main():
     app.add_handler(CallbackQueryHandler(proxy_callback_handler, pattern="^proxy_"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_proxy_text_input))
 
-    # Start bot
+    # Start bot using run_polling (stable)
     logger.info("Bot is starting...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
