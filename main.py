@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Telegram Bot for Instagram Username Checker
-- Free commands: /id, /ping
+- Free commands: /id, /ping, /help, /cmds
 - Premium command (requires admin approval): /chk
 - Admin commands: /ban, /unban, /approve, /revoke, /ram, /cleanram, /log, /backup, /restore, /proxy
 
@@ -16,15 +16,16 @@ import json
 import logging
 import os
 import random
-import re
 import time
 import gc
 import psutil
 import sys
+import zipfile
+import io
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Tuple
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -85,7 +86,6 @@ file_lock = asyncio.Lock()
 # Persistence Helpers
 # ------------------------------
 async def load_user_data():
-    """Load user_data.json if exists, else create empty dict."""
     global user_data
     async with file_lock:
         if Path(USER_DATA_FILE).exists():
@@ -95,16 +95,12 @@ async def load_user_data():
             user_data = {}
             await save_user_data()
 
-
 async def save_user_data():
-    """Save user_data to JSON file."""
     async with file_lock:
         with open(USER_DATA_FILE, "w") as f:
             json.dump(user_data, f, indent=2)
 
-
 async def load_proxy_config():
-    """Load proxy configuration."""
     global proxy_config
     async with file_lock:
         if Path(PROXY_CONFIG_FILE).exists():
@@ -114,39 +110,31 @@ async def load_proxy_config():
             proxy_config = DEFAULT_PROXY_CONFIG.copy()
             await save_proxy_config()
 
-
 async def save_proxy_config():
-    """Save proxy configuration."""
     async with file_lock:
         with open(PROXY_CONFIG_FILE, "w") as f:
             json.dump(proxy_config, f, indent=2)
 
-
 def get_user_record(user_id: int) -> dict:
-    """Get user record, create default if not exists."""
     uid = str(user_id)
     if uid not in user_data:
         user_data[uid] = {
             "id": user_id,
             "first_name": "",
             "username": "",
-            "approved_commands": [],   # list of command names like "chk"
+            "approved_commands": [],
             "banned": False,
         }
     return user_data[uid]
 
-
 def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
-
 
 def is_banned(user_id: int) -> bool:
     record = get_user_record(user_id)
     return record.get("banned", False)
 
-
 def has_permission(user_id: int, command: str) -> bool:
-    """Check if user has permission for a premium command."""
     if is_admin(user_id):
         return True
     if is_banned(user_id):
@@ -156,10 +144,9 @@ def has_permission(user_id: int, command: str) -> bool:
 
 
 # ------------------------------
-# Permission Decorator
+# Permission Decorators
 # ------------------------------
 def require_permission(command: str):
-    """Decorator to restrict access to premium commands."""
     def decorator(func):
         @wraps(func)
         async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -179,9 +166,7 @@ def require_permission(command: str):
         return wrapper
     return decorator
 
-
 def admin_only(func):
-    """Decorator to restrict commands to admins only."""
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = update.effective_user
@@ -195,7 +180,7 @@ def admin_only(func):
 
 
 # ------------------------------
-# Instagram Checker Logic (async with proxy & retries)
+# Instagram Checker Logic
 # ------------------------------
 async def check_single_username(
     username: str,
@@ -203,14 +188,8 @@ async def check_single_username(
     proxies: List[str],
     session: aiohttp.ClientSession,
 ) -> Tuple[str, str]:
-    """
-    Check if Instagram username exists.
-    Returns: (username, status) where status is "EXISTS", "NOT_EXIST", or "ERROR"
-    """
     url = f"https://www.instagram.com/{username}/"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
     for attempt in range(1, RETRY_LIMIT + 1):
         proxy = None
@@ -221,33 +200,24 @@ async def check_single_username(
                 url, headers=headers, timeout=CHECK_TIMEOUT, proxy=proxy
             ) as resp:
                 html = await resp.text()
-                # Core detection logic: look for the canonical alternate link
                 if f'rel="alternate" href="https://www.instagram.com/{username}/"' in html:
                     return username, "EXISTS"
                 else:
-                    # If 404, definitely not exist
                     if resp.status == 404:
                         return username, "NOT_EXIST"
-                    # Otherwise assume not exist (Instagram returns 200 for non-existing with different content)
                     return username, "NOT_EXIST"
         except Exception as e:
             logger.warning(f"Attempt {attempt} for {username} failed: {e}")
             if attempt == RETRY_LIMIT:
                 return username, "ERROR"
-            await asyncio.sleep(1)  # wait before retry
-    return username, "ERROR"  # fallback
-
+            await asyncio.sleep(1)
+    return username, "ERROR"
 
 async def check_usernames_batch(
     usernames: List[str],
     use_proxy: bool,
     proxies: List[str],
-    progress_callback=None,
 ) -> Dict[str, str]:
-    """
-    Check multiple usernames concurrently.
-    Returns dict {username: status}
-    """
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_CHECKS)
     results = {}
 
@@ -260,23 +230,51 @@ async def check_usernames_batch(
     for coro in asyncio.as_completed(tasks):
         user, status = await coro
         results[user] = status
-        if progress_callback:
-            await progress_callback(user, status)
     return results
 
 
 # ------------------------------
 # Free Commands
 # ------------------------------
+async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    get_user_record(user.id)
+    await save_user_data()
+    await update.message.reply_text(
+        f"👋 Hello {user.first_name}!\n\n"
+        f"🤖 *Instagram Username Checker Bot*\n"
+        f"🔓 Free commands: /id , /ping , /help , /cmds\n"
+        f"⭐ Premium command: /chk (requires admin approval)\n"
+        f"🛠️ Admins have additional commands.\n\n"
+        f"Use /help to see all available commands.",
+        parse_mode="Markdown"
+    )
+
+async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    is_adm = is_admin(user_id)
+    premium = has_permission(user_id, "chk")
+    msg = "📖 *Bot Commands*\n\n"
+    msg += "🔓 *Free for all:*\n/id - Your user info\n/ping - Bot uptime & response\n/help - Show this help\n/cmds - Same as /help\n\n"
+    if premium or is_adm:
+        msg += "⭐ *Premium:*\n/chk - Check Instagram usernames (supports file reply)\n\n"
+    if is_adm:
+        msg += "🛠️ *Admin Commands:*\n"
+        msg += "/ban <id> - Ban user\n/unban <id> - Unban user\n"
+        msg += "/approve <id> <cmd|all> - Grant command permission\n/revoke <id> <cmd|all> - Revoke permission\n"
+        msg += "/ram - Show system resources\n/cleanram - Run garbage collection\n/log - Send bot log\n"
+        msg += "/backup - Download all bot files\n/restore - Restore user data (reply to JSON)\n"
+        msg += "/proxy - Manage proxies for /chk\n"
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
+async def cmd_cmds(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await cmd_help(update, context)
+
 async def cmd_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show user information: name, username, ID, and bot status (premium/banned/free)."""
     user = update.effective_user
     if not user:
         return
-
-    uid = str(user.id)
     record = get_user_record(user.id)
-    # Update name/username in record
     record["first_name"] = user.first_name
     record["username"] = user.username or ""
     await save_user_data()
@@ -296,9 +294,7 @@ async def cmd_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(msg, parse_mode="Markdown")
 
-
 async def cmd_ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show bot uptime and response time."""
     uptime_sec = (datetime.now() - start_time).total_seconds()
     uptime_str = f"{int(uptime_sec // 3600)}h {int((uptime_sec % 3600) // 60)}m {int(uptime_sec % 60)}s"
     start_ts = time.time()
@@ -319,15 +315,14 @@ async def send_check_results(
     usernames: List[str],
     results: Dict[str, str],
     start_time_check: float,
+    context: ContextTypes.DEFAULT_TYPE,
 ):
-    """Format and send checking results with summary and buttons."""
     total = len(usernames)
     exist = sum(1 for s in results.values() if s == "EXISTS")
     not_exist = sum(1 for s in results.values() if s == "NOT_EXIST")
     errors = sum(1 for s in results.values() if s == "ERROR")
     elapsed = time.time() - start_time_check
 
-    # Build summary message
     summary = (
         f"✅ *Instagram Username Check*\n"
         f"📊 Total: {total}\n"
@@ -337,7 +332,6 @@ async def send_check_results(
         f"⏱️ Time: {elapsed:.2f}s"
     )
 
-    # Prepare detailed results (limit to avoid too long message)
     details = []
     for u in usernames:
         status = results.get(u, "UNKNOWN")
@@ -348,10 +342,8 @@ async def send_check_results(
         else:
             details.append(f"⚠️ {u}")
 
-    # If too many lines, send as file
     detail_text = "\n".join(details)
     if len(detail_text) > 3500:
-        # Send as text file
         await update.message.reply_document(
             document=detail_text.encode(),
             filename="check_results.txt",
@@ -361,31 +353,22 @@ async def send_check_results(
     else:
         await update.message.reply_text(summary + "\n\n" + detail_text, parse_mode="Markdown")
 
-    # Provide buttons to download clean lists
-    keyboard = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("📥 Existing only (txt)", callback_data="dl_exist"),
-                InlineKeyboardButton("📥 Non-existing only (txt)", callback_data="dl_notexist"),
-            ]
-        ]
-    )
-    # Store results in context for callback queries
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📥 Existing only (txt)", callback_data="dl_exist"),
+         InlineKeyboardButton("📥 Non-existing only (txt)", callback_data="dl_notexist")]
+    ])
     context.user_data["last_check_results"] = results
     context.user_data["last_check_usernames"] = usernames
     await update.message.reply_text("📎 *Download clean lists:*", reply_markup=keyboard, parse_mode="Markdown")
 
-
 async def handle_download_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Callback for downloading existing / non-existing usernames as txt file."""
     query = update.callback_query
     await query.answer()
     results = context.user_data.get("last_check_results", {})
     if not results:
         await query.edit_message_text("No recent check results found. Please run /chk again.")
         return
-
-    data_type = query.data  # "dl_exist" or "dl_notexist"
+    data_type = query.data
     if data_type == "dl_exist":
         usernames = [u for u, s in results.items() if s == "EXISTS"]
         filename = "existing_usernames.txt"
@@ -394,33 +377,23 @@ async def handle_download_callback(update: Update, context: ContextTypes.DEFAULT
         usernames = [u for u, s in results.items() if s == "NOT_EXIST"]
         filename = "non_existing_usernames.txt"
         caption = "❌ Non-existing usernames"
-
     if not usernames:
         await query.edit_message_text("No usernames found for this category.")
         return
-
     content = "\n".join(usernames)
     await query.message.reply_document(
         document=content.encode(),
         filename=filename,
         caption=caption,
     )
-    await query.delete_message()  # remove the button message
-
+    await query.delete_message()
 
 @require_permission("chk")
 async def cmd_chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Check Instagram usernames.
-    Supports:
-    - /chk username1 username2 ...
-    - Reply to a .txt file with one username per line
-    - Text message with one username per line
-    """
     start_time_check = time.time()
     usernames = []
 
-    # 1. Check if replying to a document (text file)
+    # Reply to .txt file
     if update.message.reply_to_message and update.message.reply_to_message.document:
         doc = update.message.reply_to_message.document
         if doc.mime_type == "text/plain" or doc.file_name.endswith(".txt"):
@@ -429,11 +402,9 @@ async def cmd_chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
             lines = content.decode("utf-8").splitlines()
             usernames = [line.strip() for line in lines if line.strip()]
     else:
-        # 2. Parse command arguments or text message
         if context.args:
             usernames = [arg.strip() for arg in context.args if arg.strip()]
         else:
-            # Use entire message text (excluding command)
             text = update.message.text.replace("/chk", "").strip()
             if text:
                 usernames = [line.strip() for line in text.splitlines() if line.strip()]
@@ -448,7 +419,7 @@ async def cmd_chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Remove duplicates while preserving order
+    # Remove duplicates
     seen = set()
     unique_usernames = []
     for u in usernames:
@@ -457,26 +428,14 @@ async def cmd_chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
             unique_usernames.append(u)
     usernames = unique_usernames
 
-    # Inform user
-    progress_msg = await update.message.reply_text(
-        f"🔍 Checking {len(usernames)} username(s) ... (this may take a while)"
-    )
+    progress_msg = await update.message.reply_text(f"🔍 Checking {len(usernames)} username(s) ... (this may take a while)")
 
-    # Get proxy settings
     use_proxy = proxy_config.get("enabled_for_chk", False) and bool(proxy_config.get("proxies"))
     proxies = proxy_config.get("proxies", [])
 
-    # Progress callback (optional: update message periodically)
-    async def progress_callback(username, status):
-        # Could update progress message every 10 checks, but keep simple
-        pass
+    results = await check_usernames_batch(usernames, use_proxy, proxies)
 
-    results = await check_usernames_batch(usernames, use_proxy, proxies, progress_callback)
-
-    # Delete progress message
     await progress_msg.delete()
-
-    # Send final results
     await send_check_results(update, usernames, results, start_time_check, context)
 
 
@@ -485,7 +444,6 @@ async def cmd_chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ------------------------------
 @admin_only
 async def cmd_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ban a user: /ban <user_id>"""
     if not context.args:
         await update.message.reply_text("Usage: /ban <user_id>")
         return
@@ -499,10 +457,8 @@ async def cmd_ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await save_user_data()
     await update.message.reply_text(f"✅ User {user_id} has been banned.")
 
-
 @admin_only
 async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Unban a user: /unban <user_id>"""
     if not context.args:
         await update.message.reply_text("Usage: /unban <user_id>")
         return
@@ -516,14 +472,8 @@ async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await save_user_data()
     await update.message.reply_text(f"✅ User {user_id} has been unbanned.")
 
-
 @admin_only
 async def cmd_approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Approve a command for a user.
-    Usage: /approve <user_id> <command|all>
-    Example: /approve 123456789 chk
-    """
     if len(context.args) < 2:
         await update.message.reply_text("Usage: /approve <user_id> <command|all>")
         return
@@ -535,27 +485,20 @@ async def cmd_approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cmd_name = context.args[1].lower()
     record = get_user_record(user_id)
     if cmd_name == "all":
-        # Approve all premium commands (currently only 'chk')
         if "chk" not in record["approved_commands"]:
             record["approved_commands"].append("chk")
         await save_user_data()
         await update.message.reply_text(f"✅ All premium commands approved for user {user_id}.")
-    else:
-        if cmd_name not in ["chk"]:
-            await update.message.reply_text(f"Unknown command '{cmd_name}'. Available: chk")
-            return
+    elif cmd_name == "chk":
         if cmd_name not in record["approved_commands"]:
             record["approved_commands"].append(cmd_name)
             await save_user_data()
         await update.message.reply_text(f"✅ Command '{cmd_name}' approved for user {user_id}.")
-
+    else:
+        await update.message.reply_text(f"Unknown command '{cmd_name}'. Available: chk")
 
 @admin_only
 async def cmd_revoke(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Revoke a command from a user.
-    Usage: /revoke <user_id> <command|all>
-    """
     if len(context.args) < 2:
         await update.message.reply_text("Usage: /revoke <user_id> <command|all>")
         return
@@ -570,16 +513,16 @@ async def cmd_revoke(update: Update, context: ContextTypes.DEFAULT_TYPE):
         record["approved_commands"] = []
         await save_user_data()
         await update.message.reply_text(f"✅ All premium commands revoked for user {user_id}.")
-    else:
+    elif cmd_name == "chk":
         if cmd_name in record["approved_commands"]:
             record["approved_commands"].remove(cmd_name)
             await save_user_data()
         await update.message.reply_text(f"✅ Command '{cmd_name}' revoked for user {user_id}.")
-
+    else:
+        await update.message.reply_text(f"Unknown command '{cmd_name}'. Available: chk")
 
 @admin_only
 async def cmd_ram(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show RAM and system details."""
     mem = psutil.virtual_memory()
     cpu_percent = psutil.cpu_percent(interval=1)
     disk = psutil.disk_usage("/")
@@ -591,41 +534,25 @@ async def cmd_ram(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(msg, parse_mode="Markdown")
 
-
 @admin_only
 async def cmd_cleanram(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Force garbage collection and log memory."""
     before = psutil.virtual_memory().used
     gc.collect()
     after = psutil.virtual_memory().used
     freed = (before - after) / (1024**2)
     await update.message.reply_text(f"🧹 Garbage collector run. Freed approx {freed:.2f} MB of memory.")
 
-
 @admin_only
 async def cmd_log(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Send the bot log file."""
     if Path(LOG_FILE).exists():
         with open(LOG_FILE, "rb") as f:
             await update.message.reply_document(document=f, filename="bot.log")
     else:
         await update.message.reply_text("No log file found.")
 
-
 @admin_only
 async def cmd_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Send backup of main files, user data, and proxy config."""
-    files_to_backup = [
-        "main.py",
-        "requirements.txt",
-        "Dockerfile",
-        USER_DATA_FILE,
-        PROXY_CONFIG_FILE,
-        LOG_FILE,
-    ]
-    import zipfile
-    import io
-
+    files_to_backup = ["main.py", "requirements.txt", "Dockerfile", USER_DATA_FILE, PROXY_CONFIG_FILE, LOG_FILE]
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
         for fname in files_to_backup:
@@ -638,13 +565,8 @@ async def cmd_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         caption="📦 Full bot backup"
     )
 
-
 @admin_only
 async def cmd_restore(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Restore user data from a JSON file.
-    Admin must send a JSON file (the user_data.json backup) with the command /restore.
-    """
     if not update.message.reply_to_message or not update.message.reply_to_message.document:
         await update.message.reply_text("Please reply to a JSON file with /restore")
         return
@@ -659,7 +581,6 @@ async def cmd_restore(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"Invalid JSON: {e}")
         return
-    # Basic validation
     if not isinstance(restored_data, dict):
         await update.message.reply_text("Invalid format: root must be an object.")
         return
@@ -674,7 +595,6 @@ async def cmd_restore(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Proxy Management (Admin)
 # ------------------------------
 def build_proxy_keyboard() -> InlineKeyboardMarkup:
-    """Create inline keyboard for proxy management."""
     buttons = [
         [InlineKeyboardButton("📋 List Proxies", callback_data="proxy_list")],
         [InlineKeyboardButton("➕ Add Proxy", callback_data="proxy_add")],
@@ -684,10 +604,8 @@ def build_proxy_keyboard() -> InlineKeyboardMarkup:
     ]
     return InlineKeyboardMarkup(buttons)
 
-
 @admin_only
 async def cmd_proxy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show proxy management menu."""
     status = "✅ ENABLED" if proxy_config.get("enabled_for_chk") else "❌ DISABLED"
     proxy_count = len(proxy_config.get("proxies", []))
     await update.message.reply_text(
@@ -699,9 +617,7 @@ async def cmd_proxy(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
     )
 
-
 async def proxy_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle callbacks from proxy management menu."""
     query = update.callback_query
     await query.answer()
     data = query.data
@@ -725,7 +641,6 @@ async def proxy_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         if not proxies:
             await query.edit_message_text("No proxies to delete.", reply_markup=build_proxy_keyboard())
             return
-        # Build buttons for each proxy to delete
         buttons = []
         for idx, proxy in enumerate(proxies):
             short = proxy[:50] + "..." if len(proxy) > 50 else proxy
@@ -737,10 +652,7 @@ async def proxy_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         proxy_config["enabled_for_chk"] = not current
         await save_proxy_config()
         new_status = "ENABLED" if not current else "DISABLED"
-        await query.edit_message_text(
-            f"Proxy for /chk has been {new_status}.",
-            reply_markup=build_proxy_keyboard(),
-        )
+        await query.edit_message_text(f"Proxy for /chk has been {new_status}.", reply_markup=build_proxy_keyboard())
     elif data == "proxy_close":
         await query.delete_message()
     elif data == "proxy_back":
@@ -755,16 +667,13 @@ async def proxy_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         else:
             await query.edit_message_text("Invalid index.", reply_markup=build_proxy_keyboard())
 
-
 async def handle_proxy_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Receive proxy string from user when waiting for proxy_add."""
     if context.user_data.get("waiting_for_proxy"):
         proxy_str = update.message.text.strip()
         if proxy_str.lower() == "/cancel":
             context.user_data.pop("waiting_for_proxy", None)
             await update.message.reply_text("Cancelled.")
             return
-        # Basic validation: must start with http:// or socks5://
         if not (proxy_str.startswith("http://") or proxy_str.startswith("https://") or proxy_str.startswith("socks5://")):
             await update.message.reply_text("Invalid proxy format. Must start with http://, https://, or socks5://")
             return
@@ -774,15 +683,13 @@ async def handle_proxy_text_input(update: Update, context: ContextTypes.DEFAULT_
         await save_proxy_config()
         context.user_data.pop("waiting_for_proxy", None)
         await update.message.reply_text(f"✅ Proxy added: `{proxy_str}`", parse_mode="Markdown")
-        # Show menu again
         await cmd_proxy(update, context)
 
 
 # ------------------------------
 # Automatic Backup Task (every 48h)
 # ------------------------------
-async def auto_backup(context: ContextTypes.DEFAULT_TYPE):
-    """Send user_data and proxy_config to all admins every 48 hours."""
+async def auto_backup(app: Application):
     while True:
         await asyncio.sleep(BACKUP_INTERVAL_HOURS * 3600)
         backup_data = {
@@ -793,7 +700,7 @@ async def auto_backup(context: ContextTypes.DEFAULT_TYPE):
         backup_json = json.dumps(backup_data, indent=2)
         for admin_id in ADMIN_IDS:
             try:
-                await context.bot.send_document(
+                await app.bot.send_document(
                     chat_id=admin_id,
                     document=backup_json.encode(),
                     filename=f"auto_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
@@ -804,57 +711,27 @@ async def auto_backup(context: ContextTypes.DEFAULT_TYPE):
 
 
 # ------------------------------
-# Start Command
-# ------------------------------
-async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Send welcome message."""
-    user = update.effective_user
-    get_user_record(user.id)  # ensure user exists
-    await save_user_data()
-    await update.message.reply_text(
-        f"👋 Hello {user.first_name}!\n\n"
-        f"🤖 *Instagram Username Checker Bot*\n"
-        f"🔓 Free commands: /id , /ping\n"
-        f"⭐ Premium command: /chk (requires admin approval)\n"
-        f"🛠️ Admins have additional commands.\n\n"
-        f"Use /help to see all available commands.",
-        parse_mode="Markdown"
-    )
-
-
-async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show help message."""
-    user_id = update.effective_user.id
-    is_adm = is_admin(user_id)
-    premium = has_permission(user_id, "chk")
-    msg = "📖 *Bot Commands*\n\n"
-    msg += "🔓 *Free for all:*\n/id - Your user info\n/ping - Bot uptime & response\n\n"
-    if premium or is_adm:
-        msg += "⭐ *Premium:*\n/chk - Check Instagram usernames (supports file reply)\n\n"
-    if is_adm:
-        msg += "🛠️ *Admin Commands:*\n"
-        msg += "/ban <id> - Ban user\n/unban <id> - Unban user\n"
-        msg += "/approve <id> <cmd|all> - Grant command permission\n/revoke <id> <cmd|all> - Revoke permission\n"
-        msg += "/ram - Show system resources\n/cleanram - Run garbage collection\n/log - Send bot log\n"
-        msg += "/backup - Download all bot files\n/restore - Restore user data (reply to JSON)\n"
-        msg += "/proxy - Manage proxies for /chk\n"
-    await update.message.reply_text(msg, parse_mode="Markdown")
-
-
-# ------------------------------
 # Main
 # ------------------------------
-async def main():
+async def post_init(app: Application):
+    """Start auto backup after app is initialized."""
+    asyncio.create_task(auto_backup(app))
+
+def main():
     # Load data
-    await load_user_data()
-    await load_proxy_config()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(load_user_data())
+    loop.run_until_complete(load_proxy_config())
+    loop.close()
 
     # Build application
-    app = Application.builder().token(TOKEN).build()
+    app = Application.builder().token(TOKEN).post_init(post_init).build()
 
     # Free commands
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))
+    app.add_handler(CommandHandler("cmds", cmd_cmds))
     app.add_handler(CommandHandler("id", cmd_id))
     app.add_handler(CommandHandler("ping", cmd_ping))
 
@@ -878,17 +755,9 @@ async def main():
     app.add_handler(CallbackQueryHandler(proxy_callback_handler, pattern="^proxy_"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_proxy_text_input))
 
-    # Start auto backup task
-    asyncio.create_task(auto_backup(app.bot))
-
     # Start bot
     logger.info("Bot is starting...")
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
-    # Keep running
-    await asyncio.Event().wait()
-
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
