@@ -1,8 +1,0 @@
-python-telegram-bot==20.7
-python-dotenv==1.0.0
-supabase==2.3.4
-selenium==4.18.1
-undetected-chromedriver==3.5.5
-Pillow==10.2.0
-fake-useragent==1.5.1
-psycopg2-binary==2.9.9
