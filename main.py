@@ -1,15 +1,46 @@
-import os, json, time, zipfile, random, requests, psutil
+import io
+import os
+import gc
+import re
+import json
+import time
+import zipfile
+import random
+import shutil
+import platform
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
+
+import psutil
+import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.constants import ParseMode
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler, ContextTypes,
-    CallbackQueryHandler, MessageHandler, filters
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    CallbackQueryHandler,
+    MessageHandler,
+    filters,
 )
 
-# ========= ENV =========
+# =========================================================
+# ENV
+# =========================================================
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-BOT_ADMIN = int(os.getenv("BOT_ADMIN"))
+BOT_ADMIN = os.getenv("BOT_ADMIN")
 
+if not BOT_TOKEN:
+    raise RuntimeError("BOT_TOKEN is missing in environment variables.")
+
+if not BOT_ADMIN:
+    raise RuntimeError("BOT_ADMIN is missing in environment variables.")
+
+BOT_ADMIN = int(BOT_ADMIN)
+
+# =========================================================
+# SETTINGS
+# =========================================================
 THREADS = 10
 START_TIME = time.time()
 
@@ -17,289 +48,986 @@ DATA_FILE = "users.json"
 LOG_FILE = "bot.log"
 PROXY_FILE = "proxies.json"
 
-# ========= INIT =========
-if not os.path.exists(DATA_FILE):
-    json.dump({"approved": {}, "banned": []}, open(DATA_FILE, "w"))
+session = requests.Session()
+headers = {
+    "User-Agent": "Mozilla/5.0"
+}
 
-if not os.path.exists(PROXY_FILE):
-    json.dump({"proxies": [], "enabled_cmds": {}}, open(PROXY_FILE, "w"))
+# =========================================================
+# INIT FILES
+# =========================================================
+def ensure_json_file(path: str, default_data: dict) -> None:
+    if not os.path.exists(path):
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(default_data, f, indent=2)
 
-# ========= HELPERS =========
-def load_data(): return json.load(open(DATA_FILE))
-def save_data(d): json.dump(d, open(DATA_FILE, "w"), indent=2)
+ensure_json_file(DATA_FILE, {"approved": {}, "banned": []})
+ensure_json_file(PROXY_FILE, {"proxies": [], "enabled_cmds": {"chk": False}})
 
-def load_proxies(): return json.load(open(PROXY_FILE))
-def save_proxies(d): json.dump(d, open(PROXY_FILE, "w"), indent=2)
-
-def log(t):
-    print(t)
+# =========================================================
+# LOGGING
+# =========================================================
+def log(text: str) -> None:
+    stamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    line = f"[{stamp}] {text}"
+    print(line, flush=True)
     with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(t + "\n")
+        f.write(line + "\n")
 
-def is_admin(uid): return uid == BOT_ADMIN
+# =========================================================
+# DATA HELPERS
+# =========================================================
+def load_data() -> dict:
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-def is_approved(uid, cmd):
-    d = load_data()
-    if uid == BOT_ADMIN: return True
-    if uid in d["banned"]: return False
-    return str(uid) in d["approved"] and (
-        cmd in d["approved"][str(uid)] or "all" in d["approved"][str(uid)]
-    )
+def save_data(data: dict) -> None:
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
 
-def extract(text):
-    out = []
-    for l in text.splitlines():
-        l = l.strip().replace("@","")
-        if l: out.extend(l.split())
-    return out
+def load_proxies() -> dict:
+    with open(PROXY_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-# ========= PROXY =========
-def format_proxy(p):
-    parts = p.split(":")
+def save_proxies(data: dict) -> None:
+    with open(PROXY_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+# =========================================================
+# AUTH / PERMISSIONS
+# =========================================================
+def is_admin(user_id: int) -> bool:
+    return user_id == BOT_ADMIN
+
+def is_banned(user_id: int) -> bool:
+    data = load_data()
+    return user_id in data.get("banned", [])
+
+def is_approved(user_id: int, cmd: str) -> bool:
+    if is_admin(user_id):
+        return True
+
+    data = load_data()
+
+    if user_id in data.get("banned", []):
+        return False
+
+    approved = data.get("approved", {})
+    user_cmds = approved.get(str(user_id), [])
+    return cmd in user_cmds or "all" in user_cmds
+
+# =========================================================
+# INPUT HELPERS
+# =========================================================
+USERNAME_RE = re.compile(r"^[A-Za-z0-9._]{1,30}$")
+
+def clean_username(username: str) -> str:
+    return username.strip().replace("@", "")
+
+def is_valid_username(username: str) -> bool:
+    return bool(USERNAME_RE.fullmatch(username))
+
+def extract_usernames(text: str) -> list[str]:
+    usernames = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        parts = line.split()
+        for part in parts:
+            part = clean_username(part)
+            if part and part.lower() != "chk" and is_valid_username(part):
+                usernames.append(part)
+
+    # keep order, remove duplicates
+    seen = set()
+    final = []
+    for u in usernames:
+        if u not in seen:
+            seen.add(u)
+            final.append(u)
+    return final
+
+def reply_id(update: Update) -> int | None:
+    if update.message:
+        return update.message.message_id
+    if update.callback_query and update.callback_query.message:
+        return update.callback_query.message.message_id
+    return None
+
+# =========================================================
+# PROXY HELPERS
+# =========================================================
+def format_proxy(proxy_line: str) -> str:
+    """
+    Supports:
+    host:port
+    host:port:user:pass
+    """
+    parts = proxy_line.strip().split(":")
+    if len(parts) == 2:
+        host, port = parts
+        return f"http://{host}:{port}"
     if len(parts) == 4:
-        host, port, user, pwd = parts
-        return f"http://{user}:{pwd}@{host}:{port}"
-    return f"http://{p}"
+        host, port, user, password = parts
+        return f"http://{user}:{password}@{host}:{port}"
+    raise ValueError(f"Invalid proxy format: {proxy_line}")
 
-def get_random_proxy_for_cmd(cmd):
-    d = load_proxies()
-    if not d["enabled_cmds"].get(cmd): return None
-    if not d["proxies"]: return None
+def get_proxy_for_request(cmd: str) -> dict | None:
+    data = load_proxies()
+    enabled = data.get("enabled_cmds", {}).get(cmd, False)
+    proxies = data.get("proxies", [])
 
-    p = random.choice(d["proxies"])
-    proxy_url = format_proxy(p)
+    if not enabled or not proxies:
+        return None
 
+    chosen = random.choice(proxies)
+    proxy_url = format_proxy(chosen)
     return {"http": proxy_url, "https": proxy_url}
 
-# ========= SESSION =========
-session = requests.Session()
-headers = {"User-Agent": "Mozilla/5.0"}
+def proxy_status_text() -> str:
+    data = load_proxies()
+    proxies = data.get("proxies", [])
+    enabled_cmds = data.get("enabled_cmds", {})
+    chk_enabled = enabled_cmds.get("chk", False)
 
-# ========= CHECK =========
-def check(username, proxy):
+    return (
+        f"<b>Proxy Status</b>\n\n"
+        f"• Saved proxies: <b>{len(proxies)}</b>\n"
+        f"• /chk proxy: <b>{'ON' if chk_enabled else 'OFF'}</b>\n"
+    )
+
+# =========================================================
+# CORE CHECK
+# EXACT LOGIC KEPT FROM USER SCRIPT
+# =========================================================
+def check_instagram_username(username: str, proxy: dict | None) -> str:
     url = f"https://www.instagram.com/{username}/"
 
     try:
         res = session.get(url, headers=headers, timeout=10, proxies=proxy)
         html = res.text
 
+        preview = html[:180].replace("\n", " ").replace("\r", " ")
+        log(f"CHECK username={username} status={res.status_code} html_len={len(html)} proxy={proxy}")
+        log(f"HTML_PREVIEW username={username} preview={preview}")
+
+        # EXACT SAME LOGIC
         if f'rel="alternate" href="https://www.instagram.com/{username}/"' in html:
-            result = f"{username} → ✅"
+            result = f"{username} → ✅ EXISTS"
         else:
-            result = f"{username} → ❌"
+            result = f"{username} → ❌ NOT EXIST"
 
     except Exception as e:
-        result = f"{username} → ⚠️"
-        log(f"ERR {username}: {e}")
+        result = f"{username} → ⚠️ ERROR"
+        log(f"ERROR username={username} err={e}")
 
-    log(result)
+    log(f"RESULT {result}")
     return result
 
-# ========= BASIC =========
-async def start(u, c): await u.message.reply_text("👋 Welcome")
+# =========================================================
+# UI HELPERS
+# =========================================================
+async def send_html_reply(update: Update, text: str, **kwargs):
+    await update.message.reply_text(
+        text,
+        parse_mode=ParseMode.HTML,
+        reply_to_message_id=reply_id(update),
+        **kwargs,
+    )
 
-async def cmds(u, c):
-    uid = u.effective_user.id
-    msg = "📜 Commands\n\nBasic:\n/start /help /id /ping\n\nPro:\n/chk\n"
-    if is_admin(uid):
-        msg += "\nAdmin:\n/approve /revoke /ban /unban /log /ram /backup /restore /proxy"
-    await u.message.reply_text(msg)
+def build_main_welcome(user_name: str) -> str:
+    return (
+        f"<b>🔥 Instagram Checker Bot</b>\n\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"👋 Welcome, <b>{user_name}</b>\n\n"
+        f"This bot is built for Instagram username checking, access control, "
+        f"admin tools, backups, logs, and proxy management.\n\n"
+        f"📌 Use <b>/cmds</b> to see all commands\n"
+        f"📘 Use <b>/help</b> to learn how to use them\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"⚡ Fast • Structured • Railway Ready"
+    )
 
-async def help_cmd(u,c): await u.message.reply_text("/chk username or txt")
+def build_cmds_text(user_id: int) -> str:
+    text = (
+        "<b>📜 Command Panel</b>\n\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        "<b>🔹 Basic Commands</b>\n"
+        "• /start → welcome message\n"
+        "• /cmds → command list\n"
+        "• /help → usage guide\n"
+        "• /id → show your Telegram info\n"
+        "• /ping → uptime and bot status\n\n"
+        "<b>⚡ Pro Commands</b>\n"
+        "• /chk → Instagram username checker\n"
+    )
 
-async def id_cmd(u,c):
-    user=u.effective_user
-    await u.message.reply_text(f"ID:{user.id}\n@{user.username}")
+    if is_admin(user_id):
+        text += (
+            "\n<b>👑 Admin Commands</b>\n"
+            "• /approve &lt;user_id&gt; &lt;cmd|all&gt;\n"
+            "• /revoke &lt;user_id&gt; [cmd|all]\n"
+            "• /ban &lt;user_id&gt;\n"
+            "• /unban &lt;user_id&gt;\n"
+            "• /log → get full log file\n"
+            "• /ram → system details\n"
+            "• /cleanram → cleanup memory\n"
+            "• /backup → download all project files as zip\n"
+            "• /restore → reply to backup zip to restore\n"
+            "• /proxy → full proxy panel\n"
+        )
 
-async def ping(u,c):
-    await u.message.reply_text(f"Uptime: {int(time.time()-START_TIME)}s")
+    text += "\n━━━━━━━━━━━━━━━━━━━\nUse <b>/help</b> for detailed usage."
+    return text
 
-# ========= PRO =========
-async def chk(u, c):
-    uid = u.effective_user.id
-    if not is_approved(uid,"chk"):
-        await u.message.reply_text("❌ Not approved")
+def build_help_text(user_id: int) -> str:
+    text = (
+        "<b>📘 Help Guide</b>\n\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        "<b>🔹 /start</b>\n"
+        "Shows the welcome message and points you to /cmds.\n\n"
+        "<b>🔹 /cmds</b>\n"
+        "Shows all commands grouped by category.\n\n"
+        "<b>🔹 /id</b>\n"
+        "Shows your Telegram ID, name, and username.\n\n"
+        "<b>🔹 /ping</b>\n"
+        "Shows uptime and bot health.\n\n"
+        "<b>⚡ /chk usage</b>\n"
+        "1) Single username:\n"
+        "<code>/chk username</code>\n\n"
+        "2) Multiple usernames in one message:\n"
+        "<code>/chk user1 user2 user3</code>\n\n"
+        "3) Multiline:\n"
+        "<code>/chk\nuser1\nuser2\nuser3</code>\n\n"
+        "4) TXT file:\n"
+        "Upload a .txt file, then reply to that file with <code>/chk</code>\n\n"
+        "📌 Notes:\n"
+        "• No @ needed\n"
+        "• Duplicates are removed automatically\n"
+        "• One /chk request uses one proxy only\n"
+        "• Next /chk may use a different proxy\n"
+    )
+
+    if is_admin(user_id):
+        text += (
+            "\n<b>👑 Admin Tips</b>\n"
+            "• Approve user for one command: <code>/approve 123456789 chk</code>\n"
+            "• Approve user for all pro commands: <code>/approve 123456789 all</code>\n"
+            "• Revoke full access: <code>/revoke 123456789 all</code>\n"
+            "• Ban user: <code>/ban 123456789</code>\n"
+            "• Unban user: <code>/unban 123456789</code>\n"
+            "• Open proxy manager: <code>/proxy</code>\n"
+        )
+
+    text += "\n━━━━━━━━━━━━━━━━━━━\nBuilt for clear replies and admin control."
+    return text
+
+# =========================================================
+# BASIC COMMANDS
+# =========================================================
+async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    log(f"/start by user_id={user.id}")
+    await send_html_reply(update, build_main_welcome(user.first_name or "User"))
+
+async def cmds_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    log(f"/cmds by user_id={user.id}")
+    await send_html_reply(update, build_cmds_text(user.id))
+
+async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    log(f"/help by user_id={user.id}")
+    await send_html_reply(update, build_help_text(user.id))
+
+async def id_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    log(f"/id by user_id={user.id}")
+
+    username = f"@{user.username}" if user.username else "No username"
+    first_name = user.first_name or "Unknown"
+    last_name = user.last_name or "None"
+
+    text = (
+        "<b>🆔 User Details</b>\n\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 First Name: <b>{first_name}</b>\n"
+        f"👥 Last Name: <b>{last_name}</b>\n"
+        f"🔗 Username: <b>{username}</b>\n"
+        f"🆔 User ID: <code>{user.id}</code>\n"
+        "━━━━━━━━━━━━━━━━━━━"
+    )
+
+    await send_html_reply(update, text)
+
+async def ping_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    uptime = int(time.time() - START_TIME)
+    log(f"/ping by user_id={user.id}")
+
+    text = (
+        "<b>🏓 Bot Status</b>\n\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        "⚡ Status: <b>ONLINE</b>\n"
+        f"⏱ Uptime: <b>{uptime}</b> sec\n"
+        f"🧠 Python: <b>{platform.python_version()}</b>\n"
+        f"💻 Platform: <b>{platform.system()} {platform.release()}</b>\n"
+        "━━━━━━━━━━━━━━━━━━━"
+    )
+
+    await send_html_reply(update, text)
+
+# =========================================================
+# PRO COMMANDS
+# =========================================================
+async def chk_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    log(f"/chk by user_id={user.id}")
+
+    if is_banned(user.id):
+        await send_html_reply(update, "❌ <b>You are banned from using this bot.</b>")
         return
 
-    users=[]
-    if c.args: users.extend(c.args)
-    if u.message.text: users.extend(extract(u.message.text.replace("/chk","")))
-
-    if u.message.reply_to_message:
-        doc=u.message.reply_to_message.document
-        if doc and doc.file_name.endswith(".txt"):
-            f=await c.bot.get_file(doc.file_id)
-            users.extend(extract((await f.download_as_bytearray()).decode()))
-
-    if not users:
-        await u.message.reply_text("No users")
+    if not is_approved(user.id, "chk"):
+        await send_html_reply(
+            update,
+            "❌ <b>You are not approved for /chk.</b>\n\n"
+            "Ask admin for access."
+        )
         return
 
-    users=list(set(users))
+    usernames: list[str] = []
 
-    # 🔥 KEY FIX: ONE PROXY PER REQUEST
-    proxy = get_random_proxy_for_cmd("chk")
+    if context.args:
+        usernames.extend([clean_username(x) for x in context.args])
 
-    log(f"=== NEW /chk REQUEST ===")
-    log(f"Using proxy: {proxy}")
+    if update.message and update.message.text:
+        raw_text = update.message.text
+        raw_text = raw_text.replace("/chk", "", 1).strip()
+        if raw_text:
+            usernames.extend(extract_usernames(raw_text))
 
-    await u.message.reply_text(f"Checking {len(users)} users...")
-
-    def worker(user):
-        return check(user, proxy)
-
-    with ThreadPoolExecutor(max_workers=THREADS) as ex:
-        res=list(ex.map(worker, users))
-
-    await u.message.reply_text("\n".join(res))
-
-# ========= ADMIN =========
-async def approve(u,c):
-    if not is_admin(u.effective_user.id): return
-    uid,cmd=c.args
-    d=load_data()
-    d["approved"].setdefault(uid,[]).append(cmd)
-    save_data(d)
-    await u.message.reply_text("Approved")
-
-async def revoke(u,c):
-    if not is_admin(u.effective_user.id): return
-    uid=c.args[0]
-    d=load_data()
-    d["approved"].pop(uid,None)
-    save_data(d)
-    await u.message.reply_text("Revoked")
-
-async def ban(u,c):
-    if not is_admin(u.effective_user.id): return
-    uid=int(c.args[0])
-    d=load_data(); d["banned"].append(uid)
-    save_data(d)
-    await u.message.reply_text("Banned")
-
-async def unban(u,c):
-    if not is_admin(u.effective_user.id): return
-    uid=int(c.args[0])
-    d=load_data()
-    if uid in d["banned"]: d["banned"].remove(uid)
-    save_data(d)
-    await u.message.reply_text("Unbanned")
-
-async def log_cmd(u,c):
-    if not is_admin(u.effective_user.id): return
-    if os.path.exists(LOG_FILE):
-        await u.message.reply_document(open(LOG_FILE,"rb"))
-
-async def ram(u,c):
-    mem=psutil.virtual_memory()
-    await u.message.reply_text(f"RAM {mem.percent}%")
-
-async def backup(u,c):
-    z="backup.zip"
-    with zipfile.ZipFile(z,"w") as zz:
-        for f in os.listdir():
-            zz.write(f)
-    await u.message.reply_document(open(z,"rb"))
-
-async def restore(u,c):
-    if u.message.reply_to_message:
-        doc=u.message.reply_to_message.document
-        f=await c.bot.get_file(doc.file_id)
-        await f.download_to_drive("restore.zip")
-        with zipfile.ZipFile("restore.zip") as z:
-            z.extractall()
-        await u.message.reply_text("Restored")
-
-# ========= PROXY UI =========
-async def proxy(u,c):
-    if not is_admin(u.effective_user.id): return
-    kb=[
-        [InlineKeyboardButton("➕ Add",callback_data="p_add")],
-        [InlineKeyboardButton("➖ Remove",callback_data="p_del")],
-        [InlineKeyboardButton("🧪 Test",callback_data="p_test")],
-        [InlineKeyboardButton("⚙ Toggle /chk",callback_data="p_toggle")]
-    ]
-    await u.message.reply_text("Proxy Panel",reply_markup=InlineKeyboardMarkup(kb))
-
-async def proxy_btn(u,c):
-    q=u.callback_query
-    await q.answer()
-    d=load_proxies()
-
-    if q.data=="p_add":
-        c.user_data["pm"]="add"
-        await q.message.reply_text("Send proxies")
-
-    elif q.data=="p_del":
-        c.user_data["pm"]="del"
-        await q.message.reply_text("Send proxy to remove")
-
-    elif q.data=="p_test":
-        out=[]
-        for p in d["proxies"]:
+    if update.message and update.message.reply_to_message:
+        doc = update.message.reply_to_message.document
+        if doc and doc.file_name and doc.file_name.lower().endswith(".txt"):
             try:
-                requests.get("https://httpbin.org/ip",
-                    proxies={"http":format_proxy(p),"https":format_proxy(p)},
-                    timeout=5)
-                out.append(p+" → ✅")
-            except:
-                out.append(p+" → ❌")
-        await q.message.reply_text("\n".join(out))
+                file = await context.bot.get_file(doc.file_id)
+                content = await file.download_as_bytearray()
+                decoded = content.decode("utf-8", errors="ignore")
+                usernames.extend(extract_usernames(decoded))
+                log(f"Loaded usernames from txt file: {doc.file_name}")
+            except Exception as e:
+                log(f"TXT_READ_ERROR err={e}")
+                await send_html_reply(update, f"⚠️ <b>Could not read txt file.</b>\n<code>{e}</code>")
+                return
 
-    elif q.data=="p_toggle":
-        st=d["enabled_cmds"].get("chk",False)
-        d["enabled_cmds"]["chk"]=not st
-        save_proxies(d)
-        await q.message.reply_text(f"/chk proxy {'ON' if not st else 'OFF'}")
+    # clean invalid entries
+    cleaned = []
+    seen = set()
+    for u in usernames:
+        u = clean_username(u)
+        if not u:
+            continue
+        if not is_valid_username(u):
+            continue
+        if u not in seen:
+            seen.add(u)
+            cleaned.append(u)
 
-async def proxy_input(u,c):
-    if not is_admin(u.effective_user.id): return
-    if "pm" not in c.user_data: return
+    usernames = cleaned
 
-    d=load_proxies()
-    txt=u.message.text.splitlines()
+    if not usernames:
+        await send_html_reply(
+            update,
+            "<b>⚠️ No valid usernames found.</b>\n\n"
+            "Examples:\n"
+            "<code>/chk username</code>\n"
+            "<code>/chk user1 user2</code>\n"
+            "Or reply to a .txt file with <code>/chk</code>"
+        )
+        return
 
-    if c.user_data["pm"]=="add":
-        d["proxies"].extend(txt)
-        d["proxies"]=list(set(d["proxies"]))
-        save_proxies(d)
-        await u.message.reply_text("Added")
+    proxy = get_proxy_for_request("chk")
+    log(f"NEW_CHK_REQUEST user_id={user.id} usernames={len(usernames)} proxy={proxy}")
 
-    elif c.user_data["pm"]=="del":
-        for t in txt:
-            if t in d["proxies"]: d["proxies"].remove(t)
-        save_proxies(d)
-        await u.message.reply_text("Removed")
+    wait_text = (
+        "<b>🔍 Username Check Started</b>\n\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 Requested by: <code>{user.id}</code>\n"
+        f"📦 Total usernames: <b>{len(usernames)}</b>\n"
+        f"🌐 Proxy mode: <b>{'ON' if proxy else 'OFF'}</b>\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        "Processing..."
+    )
+    await send_html_reply(update, wait_text)
 
-    c.user_data.pop("pm")
+    def worker(username: str) -> str:
+        return check_instagram_username(username, proxy)
 
-# ========= MAIN =========
+    with ThreadPoolExecutor(max_workers=THREADS) as executor:
+        results = list(executor.map(worker, usernames))
+
+    result_text = (
+        "<b>📊 Check Result</b>\n\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        + "\n".join(results) +
+        "\n━━━━━━━━━━━━━━━━━━━\n"
+        f"✅ Done: <b>{len(results)}</b>"
+    )
+
+    await send_html_reply(update, result_text)
+
+# =========================================================
+# ADMIN COMMANDS
+# =========================================================
+async def approve_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    log(f"/approve by user_id={user.id}")
+
+    if not is_admin(user.id):
+        await send_html_reply(update, "❌ <b>Admin only.</b>")
+        return
+
+    if len(context.args) < 2:
+        await send_html_reply(
+            update,
+            "<b>Usage:</b>\n<code>/approve user_id cmd</code>\n"
+            "<code>/approve user_id all</code>"
+        )
+        return
+
+    target_user_id = context.args[0]
+    cmd_name = context.args[1].lower()
+
+    data = load_data()
+    data["approved"].setdefault(target_user_id, [])
+
+    if cmd_name not in data["approved"][target_user_id]:
+        data["approved"][target_user_id].append(cmd_name)
+
+    save_data(data)
+    log(f"APPROVED target={target_user_id} cmd={cmd_name}")
+
+    await send_html_reply(
+        update,
+        "<b>✅ Approval Updated</b>\n\n"
+        f"User: <code>{target_user_id}</code>\n"
+        f"Access: <b>{cmd_name}</b>"
+    )
+
+async def revoke_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    log(f"/revoke by user_id={user.id}")
+
+    if not is_admin(user.id):
+        await send_html_reply(update, "❌ <b>Admin only.</b>")
+        return
+
+    if len(context.args) < 1:
+        await send_html_reply(
+            update,
+            "<b>Usage:</b>\n<code>/revoke user_id</code>\n"
+            "<code>/revoke user_id cmd</code>\n"
+            "<code>/revoke user_id all</code>"
+        )
+        return
+
+    target_user_id = context.args[0]
+    cmd_name = context.args[1].lower() if len(context.args) > 1 else "all"
+
+    data = load_data()
+
+    if target_user_id not in data["approved"]:
+        await send_html_reply(update, "⚠️ <b>User has no approvals saved.</b>")
+        return
+
+    if cmd_name == "all":
+        data["approved"].pop(target_user_id, None)
+        save_data(data)
+        log(f"REVOKED_ALL target={target_user_id}")
+        await send_html_reply(
+            update,
+            "<b>❌ Access Revoked</b>\n\n"
+            f"User: <code>{target_user_id}</code>\n"
+            "Removed: <b>all approvals</b>"
+        )
+        return
+
+    user_cmds = data["approved"].get(target_user_id, [])
+    if cmd_name in user_cmds:
+        user_cmds.remove(cmd_name)
+
+    if not user_cmds:
+        data["approved"].pop(target_user_id, None)
+    else:
+        data["approved"][target_user_id] = user_cmds
+
+    save_data(data)
+    log(f"REVOKED target={target_user_id} cmd={cmd_name}")
+
+    await send_html_reply(
+        update,
+        "<b>❌ Access Revoked</b>\n\n"
+        f"User: <code>{target_user_id}</code>\n"
+        f"Removed: <b>{cmd_name}</b>"
+    )
+
+async def ban_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    log(f"/ban by user_id={user.id}")
+
+    if not is_admin(user.id):
+        await send_html_reply(update, "❌ <b>Admin only.</b>")
+        return
+
+    if len(context.args) < 1:
+        await send_html_reply(update, "<b>Usage:</b>\n<code>/ban user_id</code>")
+        return
+
+    try:
+        target = int(context.args[0])
+    except ValueError:
+        await send_html_reply(update, "⚠️ <b>Invalid user ID.</b>")
+        return
+
+    data = load_data()
+    if target not in data["banned"]:
+        data["banned"].append(target)
+    save_data(data)
+    log(f"BANNED target={target}")
+
+    await send_html_reply(update, f"🚫 <b>User banned</b>\n\nUser: <code>{target}</code>")
+
+async def unban_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    log(f"/unban by user_id={user.id}")
+
+    if not is_admin(user.id):
+        await send_html_reply(update, "❌ <b>Admin only.</b>")
+        return
+
+    if len(context.args) < 1:
+        await send_html_reply(update, "<b>Usage:</b>\n<code>/unban user_id</code>")
+        return
+
+    try:
+        target = int(context.args[0])
+    except ValueError:
+        await send_html_reply(update, "⚠️ <b>Invalid user ID.</b>")
+        return
+
+    data = load_data()
+    if target in data["banned"]:
+        data["banned"].remove(target)
+        save_data(data)
+
+    log(f"UNBANNED target={target}")
+    await send_html_reply(update, f"✅ <b>User unbanned</b>\n\nUser: <code>{target}</code>")
+
+async def log_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    log(f"/log by user_id={user.id}")
+
+    if not is_admin(user.id):
+        await send_html_reply(update, "❌ <b>Admin only.</b>")
+        return
+
+    if not os.path.exists(LOG_FILE):
+        await send_html_reply(update, "📭 <b>No log file found yet.</b>")
+        return
+
+    with open(LOG_FILE, "rb") as f:
+        await update.message.reply_document(
+            document=f,
+            filename=LOG_FILE,
+            reply_to_message_id=reply_id(update),
+            caption="📄 Full bot log file"
+        )
+
+async def ram_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    log(f"/ram by user_id={user.id}")
+
+    if not is_admin(user.id):
+        await send_html_reply(update, "❌ <b>Admin only.</b>")
+        return
+
+    vm = psutil.virtual_memory()
+    disk = psutil.disk_usage("/")
+    proc = psutil.Process(os.getpid())
+
+    text = (
+        "<b>🖥 System Details</b>\n\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        f"🧠 RAM Used: <b>{vm.percent}%</b>\n"
+        f"📦 RAM Total: <b>{round(vm.total / (1024**3), 2)} GB</b>\n"
+        f"📁 Disk Used: <b>{disk.percent}%</b>\n"
+        f"💾 Disk Total: <b>{round(disk.total / (1024**3), 2)} GB</b>\n"
+        f"⚙️ Process Memory: <b>{round(proc.memory_info().rss / (1024**2), 2)} MB</b>\n"
+        f"💻 Platform: <b>{platform.system()} {platform.release()}</b>\n"
+        f"🐍 Python: <b>{platform.python_version()}</b>\n"
+        "━━━━━━━━━━━━━━━━━━━"
+    )
+
+    await send_html_reply(update, text)
+
+async def cleanram_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    log(f"/cleanram by user_id={user.id}")
+
+    if not is_admin(user.id):
+        await send_html_reply(update, "❌ <b>Admin only.</b>")
+        return
+
+    gc.collect()
+
+    text = (
+        "<b>🧹 Memory Cleanup</b>\n\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        "✅ Python garbage collector triggered.\n"
+        "ℹ️ Full OS RAM release is controlled by the host system.\n"
+        "━━━━━━━━━━━━━━━━━━━"
+    )
+    await send_html_reply(update, text)
+
+async def backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    log(f"/backup by user_id={user.id}")
+
+    if not is_admin(user.id):
+        await send_html_reply(update, "❌ <b>Admin only.</b>")
+        return
+
+    backup_name = "backup.zip"
+
+    with zipfile.ZipFile(backup_name, "w", zipfile.ZIP_DEFLATED) as zf:
+        for item in os.listdir("."):
+            if item in {backup_name, "__pycache__"}:
+                continue
+            if os.path.isdir(item):
+                continue
+            zf.write(item)
+
+    with open(backup_name, "rb") as f:
+        await update.message.reply_document(
+            document=f,
+            filename=backup_name,
+            reply_to_message_id=reply_id(update),
+            caption="🗂 Project backup ready"
+        )
+
+    log("BACKUP_CREATED")
+
+async def restore_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    log(f"/restore by user_id={user.id}")
+
+    if not is_admin(user.id):
+        await send_html_reply(update, "❌ <b>Admin only.</b>")
+        return
+
+    if not update.message.reply_to_message or not update.message.reply_to_message.document:
+        await send_html_reply(
+            update,
+            "<b>Usage:</b>\nReply to a backup zip file with <code>/restore</code>"
+        )
+        return
+
+    doc = update.message.reply_to_message.document
+    if not doc.file_name.lower().endswith(".zip"):
+        await send_html_reply(update, "⚠️ <b>Reply to a valid .zip backup file.</b>")
+        return
+
+    restore_path = "restore.zip"
+
+    try:
+        tg_file = await context.bot.get_file(doc.file_id)
+        await tg_file.download_to_drive(restore_path)
+
+        with zipfile.ZipFile(restore_path, "r") as zf:
+            zf.extractall(".")
+
+        log(f"RESTORE_DONE filename={doc.file_name}")
+        await send_html_reply(
+            update,
+            f"<b>✅ Restore Complete</b>\n\nRestored from: <code>{doc.file_name}</code>"
+        )
+    except Exception as e:
+        log(f"RESTORE_ERROR err={e}")
+        await send_html_reply(update, f"⚠️ <b>Restore failed.</b>\n<code>{e}</code>")
+
+# =========================================================
+# PROXY UI
+# =========================================================
+def proxy_keyboard() -> InlineKeyboardMarkup:
+    kb = [
+        [InlineKeyboardButton("📊 Status", callback_data="proxy_status")],
+        [InlineKeyboardButton("➕ Add Proxy", callback_data="proxy_add")],
+        [InlineKeyboardButton("➖ Remove Proxy", callback_data="proxy_remove")],
+        [InlineKeyboardButton("📋 List Proxies", callback_data="proxy_list")],
+        [InlineKeyboardButton("🧪 Test Proxies", callback_data="proxy_test")],
+        [InlineKeyboardButton("⚙ Toggle /chk Proxy", callback_data="proxy_toggle_chk")],
+    ]
+    return InlineKeyboardMarkup(kb)
+
+async def proxy_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    log(f"/proxy by user_id={user.id}")
+
+    if not is_admin(user.id):
+        await send_html_reply(update, "❌ <b>Admin only.</b>")
+        return
+
+    text = (
+        "<b>🌐 Proxy Manager</b>\n\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        "Manage saved proxies, test them, and enable or disable proxy usage for /chk.\n\n"
+        "Supported formats:\n"
+        "<code>host:port</code>\n"
+        "<code>host:port:user:pass</code>\n"
+        "━━━━━━━━━━━━━━━━━━━"
+    )
+
+    await update.message.reply_text(
+        text,
+        parse_mode=ParseMode.HTML,
+        reply_markup=proxy_keyboard(),
+        reply_to_message_id=reply_id(update),
+    )
+
+async def proxy_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user = update.effective_user
+
+    await query.answer()
+    log(f"PROXY_BUTTON user_id={user.id} data={query.data}")
+
+    if not is_admin(user.id):
+        await query.message.reply_text("❌ Admin only.")
+        return
+
+    data = load_proxies()
+
+    if query.data == "proxy_status":
+        await query.message.reply_text(
+            proxy_status_text(),
+            parse_mode=ParseMode.HTML,
+            reply_to_message_id=query.message.message_id,
+        )
+
+    elif query.data == "proxy_add":
+        context.user_data["proxy_mode"] = "add"
+        await query.message.reply_text(
+            "<b>➕ Add Proxy Mode</b>\n\n"
+            "Send one or more proxies now.\n\n"
+            "Formats:\n"
+            "<code>host:port</code>\n"
+            "<code>host:port:user:pass</code>",
+            parse_mode=ParseMode.HTML,
+            reply_to_message_id=query.message.message_id,
+        )
+
+    elif query.data == "proxy_remove":
+        context.user_data["proxy_mode"] = "remove"
+        await query.message.reply_text(
+            "<b>➖ Remove Proxy Mode</b>\n\n"
+            "Send one or more exact proxy lines to remove.",
+            parse_mode=ParseMode.HTML,
+            reply_to_message_id=query.message.message_id,
+        )
+
+    elif query.data == "proxy_list":
+        proxies = data.get("proxies", [])
+        if not proxies:
+            await query.message.reply_text(
+                "📭 <b>No proxies saved.</b>",
+                parse_mode=ParseMode.HTML,
+                reply_to_message_id=query.message.message_id,
+            )
+        else:
+            text = "<b>📋 Saved Proxies</b>\n\n" + "\n".join(
+                f"{i+1}. <code>{p}</code>" for i, p in enumerate(proxies[:100])
+            )
+            await query.message.reply_text(
+                text,
+                parse_mode=ParseMode.HTML,
+                reply_to_message_id=query.message.message_id,
+            )
+
+    elif query.data == "proxy_test":
+        proxies = data.get("proxies", [])
+        if not proxies:
+            await query.message.reply_text(
+                "📭 <b>No proxies to test.</b>",
+                parse_mode=ParseMode.HTML,
+                reply_to_message_id=query.message.message_id,
+            )
+            return
+
+        await query.message.reply_text(
+            f"🧪 <b>Testing {len(proxies)} proxies...</b>",
+            parse_mode=ParseMode.HTML,
+            reply_to_message_id=query.message.message_id,
+        )
+
+        results = []
+        for p in proxies:
+            try:
+                proxy_url = format_proxy(p)
+                requests.get(
+                    "https://httpbin.org/ip",
+                    proxies={"http": proxy_url, "https": proxy_url},
+                    timeout=8,
+                )
+                results.append(f"{p} → ✅ LIVE")
+                log(f"PROXY_TEST {p} LIVE")
+            except Exception as e:
+                results.append(f"{p} → ❌ DEAD")
+                log(f"PROXY_TEST {p} DEAD err={e}")
+
+        # send in chunks
+        chunk = "<b>🧪 Proxy Test Result</b>\n\n"
+        for line in results:
+            if len(chunk) + len(line) + 1 > 3500:
+                await query.message.reply_text(
+                    chunk,
+                    parse_mode=ParseMode.HTML,
+                    reply_to_message_id=query.message.message_id,
+                )
+                chunk = ""
+            chunk += line + "\n"
+
+        if chunk.strip():
+            await query.message.reply_text(
+                chunk,
+                parse_mode=ParseMode.HTML,
+                reply_to_message_id=query.message.message_id,
+            )
+
+    elif query.data == "proxy_toggle_chk":
+        current = data.get("enabled_cmds", {}).get("chk", False)
+        data.setdefault("enabled_cmds", {})["chk"] = not current
+        save_proxies(data)
+        log(f"PROXY_TOGGLE chk={not current}")
+
+        await query.message.reply_text(
+            f"⚙️ <b>/chk proxy is now {'ON' if not current else 'OFF'}</b>",
+            parse_mode=ParseMode.HTML,
+            reply_to_message_id=query.message.message_id,
+        )
+
+async def proxy_input_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
+
+    user = update.effective_user
+    if not is_admin(user.id):
+        return
+
+    mode = context.user_data.get("proxy_mode")
+    if not mode:
+        return
+
+    lines = [x.strip() for x in update.message.text.splitlines() if x.strip()]
+    if not lines:
+        await send_html_reply(update, "⚠️ <b>No proxy lines received.</b>")
+        return
+
+    data = load_proxies()
+    proxies = data.get("proxies", [])
+
+    valid_lines = []
+    invalid_lines = []
+
+    for line in lines:
+        try:
+            format_proxy(line)
+            valid_lines.append(line)
+        except Exception:
+            invalid_lines.append(line)
+
+    if mode == "add":
+        new_count = 0
+        for line in valid_lines:
+            if line not in proxies:
+                proxies.append(line)
+                new_count += 1
+
+        data["proxies"] = proxies
+        save_proxies(data)
+        log(f"PROXY_ADD added={new_count}")
+
+        text = (
+            "<b>✅ Proxy Add Result</b>\n\n"
+            f"Added: <b>{new_count}</b>\n"
+            f"Invalid: <b>{len(invalid_lines)}</b>"
+        )
+        if invalid_lines:
+            text += "\n\nInvalid lines:\n" + "\n".join(f"<code>{x}</code>" for x in invalid_lines[:20])
+
+        await send_html_reply(update, text)
+
+    elif mode == "remove":
+        removed = 0
+        for line in valid_lines:
+            if line in proxies:
+                proxies.remove(line)
+                removed += 1
+
+        data["proxies"] = proxies
+        save_proxies(data)
+        log(f"PROXY_REMOVE removed={removed}")
+
+        text = (
+            "<b>❌ Proxy Remove Result</b>\n\n"
+            f"Removed: <b>{removed}</b>\n"
+            f"Invalid: <b>{len(invalid_lines)}</b>"
+        )
+        if invalid_lines:
+            text += "\n\nInvalid lines:\n" + "\n".join(f"<code>{x}</code>" for x in invalid_lines[:20])
+
+        await send_html_reply(update, text)
+
+    context.user_data.pop("proxy_mode", None)
+
+# =========================================================
+# MAIN
+# =========================================================
 def main():
-    app=ApplicationBuilder().token(BOT_TOKEN).build()
+    log("BOT_STARTING")
 
-    app.add_handler(CommandHandler("start",start))
-    app.add_handler(CommandHandler("cmds",cmds))
-    app.add_handler(CommandHandler("help",help_cmd))
-    app.add_handler(CommandHandler("id",id_cmd))
-    app.add_handler(CommandHandler("ping",ping))
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    app.add_handler(CommandHandler("chk",chk))
+    # basic
+    app.add_handler(CommandHandler("start", start_cmd))
+    app.add_handler(CommandHandler("cmds", cmds_cmd))
+    app.add_handler(CommandHandler("help", help_cmd))
+    app.add_handler(CommandHandler("id", id_cmd))
+    app.add_handler(CommandHandler("ping", ping_cmd))
 
-    app.add_handler(CommandHandler("approve",approve))
-    app.add_handler(CommandHandler("revoke",revoke))
-    app.add_handler(CommandHandler("ban",ban))
-    app.add_handler(CommandHandler("unban",unban))
-    app.add_handler(CommandHandler("log",log_cmd))
-    app.add_handler(CommandHandler("ram",ram))
-    app.add_handler(CommandHandler("backup",backup))
-    app.add_handler(CommandHandler("restore",restore))
-    app.add_handler(CommandHandler("proxy",proxy))
+    # pro
+    app.add_handler(CommandHandler("chk", chk_cmd))
 
-    app.add_handler(CallbackQueryHandler(proxy_btn))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, proxy_input))
+    # admin
+    app.add_handler(CommandHandler("approve", approve_cmd))
+    app.add_handler(CommandHandler("revoke", revoke_cmd))
+    app.add_handler(CommandHandler("ban", ban_cmd))
+    app.add_handler(CommandHandler("unban", unban_cmd))
+    app.add_handler(CommandHandler("log", log_cmd))
+    app.add_handler(CommandHandler("ram", ram_cmd))
+    app.add_handler(CommandHandler("cleanram", cleanram_cmd))
+    app.add_handler(CommandHandler("backup", backup_cmd))
+    app.add_handler(CommandHandler("restore", restore_cmd))
+    app.add_handler(CommandHandler("proxy", proxy_cmd))
 
-    print("🔥 BOT RUNNING")
-    app.run_polling()
+    # proxy ui
+    app.add_handler(CallbackQueryHandler(proxy_buttons))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, proxy_input_handler))
 
-if __name__=="__main__":
+    log("BOT_RUNNING")
+    app.run_polling(drop_pending_updates=True)
+
+if __name__ == "__main__":
     main()
