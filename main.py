@@ -140,7 +140,6 @@ def extract_usernames(text: str) -> list[str]:
             if part and part.lower() != "chk" and is_valid_username(part):
                 usernames.append(part)
 
-    # keep order, remove duplicates
     seen = set()
     final = []
     for u in usernames:
@@ -324,6 +323,33 @@ def build_help_text(user_id: int) -> str:
     text += "\n━━━━━━━━━━━━━━━━━━━\nBuilt for clear replies and admin control."
     return text
 
+def build_chk_status_text(
+    title: str,
+    total: int,
+    exist: int,
+    not_exist: int,
+    error: int,
+    proxy_status: str,
+    elapsed: int,
+    progress: int | None = None,
+) -> str:
+    text = (
+        f"<b>{title}</b>\n\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"📦 Total: <b>{total}</b>\n"
+        f"✅ Exist: <b>{exist}</b>\n"
+        f"❌ Not Exist: <b>{not_exist}</b>\n"
+        f"⚠️ Error: <b>{error}</b>\n\n"
+        f"🌐 Proxy: <b>{proxy_status}</b>\n"
+        f"⏱ Time: <b>{elapsed}s</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━"
+    )
+
+    if progress is not None:
+        text += f"\n\n⚡ Progress: <b>{progress}/{total}</b>"
+
+    return text
+
 # =========================================================
 # BASIC COMMANDS
 # =========================================================
@@ -398,6 +424,7 @@ async def chk_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    start_time = time.time()
     usernames: list[str] = []
 
     if context.args:
@@ -423,7 +450,6 @@ async def chk_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await send_html_reply(update, f"⚠️ <b>Could not read txt file.</b>\n<code>{e}</code>")
                 return
 
-    # clean invalid entries
     cleaned = []
     seen = set()
     for u in usernames:
@@ -450,34 +476,111 @@ async def chk_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     proxy = get_proxy_for_request("chk")
+    proxy_status = "ON | LIVE" if proxy else "OFF"
     log(f"NEW_CHK_REQUEST user_id={user.id} usernames={len(usernames)} proxy={proxy}")
 
-    wait_text = (
-        "<b>🔍 Username Check Started</b>\n\n"
-        "━━━━━━━━━━━━━━━━━━━\n"
-        f"👤 Requested by: <code>{user.id}</code>\n"
-        f"📦 Total usernames: <b>{len(usernames)}</b>\n"
-        f"🌐 Proxy mode: <b>{'ON' if proxy else 'OFF'}</b>\n"
-        "━━━━━━━━━━━━━━━━━━━\n"
-        "Processing..."
+    progress_message = await update.message.reply_text(
+        build_chk_status_text(
+            title="🔍 Check Started",
+            total=len(usernames),
+            exist=0,
+            not_exist=0,
+            error=0,
+            proxy_status=proxy_status,
+            elapsed=0,
+            progress=0,
+        ),
+        parse_mode=ParseMode.HTML,
+        reply_to_message_id=reply_id(update),
     )
-    await send_html_reply(update, wait_text)
+
+    exist_count = 0
+    not_exist_count = 0
+    error_count = 0
+    exists_list: list[str] = []
 
     def worker(username: str) -> str:
         return check_instagram_username(username, proxy)
 
     with ThreadPoolExecutor(max_workers=THREADS) as executor:
-        results = list(executor.map(worker, usernames))
+        for i, result in enumerate(executor.map(worker, usernames), start=1):
+            if "✅ EXISTS" in result:
+                exist_count += 1
+                exists_list.append(result.split(" → ")[0])
+            elif "❌ NOT EXIST" in result:
+                not_exist_count += 1
+            else:
+                error_count += 1
 
-    result_text = (
-        "<b>📊 Check Result</b>\n\n"
-        "━━━━━━━━━━━━━━━━━━━\n"
-        + "\n".join(results) +
-        "\n━━━━━━━━━━━━━━━━━━━\n"
-        f"✅ Done: <b>{len(results)}</b>"
+            if i % 2 == 0 or i == len(usernames):
+                elapsed = int(time.time() - start_time)
+                try:
+                    await progress_message.edit_text(
+                        build_chk_status_text(
+                            title="🔄 Check Running",
+                            total=len(usernames),
+                            exist=exist_count,
+                            not_exist=not_exist_count,
+                            error=error_count,
+                            proxy_status=proxy_status,
+                            elapsed=elapsed,
+                            progress=i,
+                        ),
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=None,
+                    )
+                except Exception as e:
+                    log(f"EDIT_TEXT_ERROR err={e}")
+
+    elapsed_total = int(time.time() - start_time)
+    context.user_data["last_exists"] = "\n".join(exists_list)
+
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📥 Get Clean Exists TXT", callback_data="get_exists")]
+    ])
+
+    try:
+        await progress_message.edit_text(
+            build_chk_status_text(
+                title="📊 Check Complete",
+                total=len(usernames),
+                exist=exist_count,
+                not_exist=not_exist_count,
+                error=error_count,
+                proxy_status=proxy_status,
+                elapsed=elapsed_total,
+                progress=len(usernames),
+            ),
+            parse_mode=ParseMode.HTML,
+            reply_markup=keyboard,
+        )
+    except Exception as e:
+        log(f"FINAL_EDIT_TEXT_ERROR err={e}")
+
+async def download_exists_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user = update.effective_user
+
+    await query.answer()
+    log(f"DOWNLOAD_EXISTS by user_id={user.id}")
+
+    data = context.user_data.get("last_exists", "")
+    if not data.strip():
+        await query.message.reply_text(
+            "❌ No exists usernames available.",
+            reply_to_message_id=query.message.message_id,
+        )
+        return
+
+    file_bytes = io.BytesIO(data.encode("utf-8"))
+    file_bytes.seek(0)
+
+    await query.message.reply_document(
+        document=file_bytes,
+        filename="exists_usernames.txt",
+        caption="📥 Clean exists usernames",
+        reply_to_message_id=query.message.message_id,
     )
-
-    await send_html_reply(update, result_text)
 
 # =========================================================
 # ADMIN COMMANDS
@@ -887,7 +990,6 @@ async def proxy_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 results.append(f"{p} → ❌ DEAD")
                 log(f"PROXY_TEST {p} DEAD err={e}")
 
-        # send in chunks
         chunk = "<b>🧪 Proxy Test Result</b>\n\n"
         for line in results:
             if len(chunk) + len(line) + 1 > 3500:
@@ -1022,8 +1124,11 @@ def main():
     app.add_handler(CommandHandler("restore", restore_cmd))
     app.add_handler(CommandHandler("proxy", proxy_cmd))
 
-    # proxy ui
-    app.add_handler(CallbackQueryHandler(proxy_buttons))
+    # callback ui
+    app.add_handler(CallbackQueryHandler(download_exists_callback, pattern="^get_exists$"))
+    app.add_handler(CallbackQueryHandler(proxy_buttons, pattern="^proxy_"))
+
+    # proxy text input mode
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, proxy_input_handler))
 
     log("BOT_RUNNING")
