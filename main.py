@@ -55,14 +55,13 @@ def extract(text):
 
 # ========= PROXY =========
 def format_proxy(p):
-    # supports ip:port OR ip:port:user:pass
     parts = p.split(":")
     if len(parts) == 4:
         host, port, user, pwd = parts
         return f"http://{user}:{pwd}@{host}:{port}"
     return f"http://{p}"
 
-def get_proxy(cmd):
+def get_random_proxy_for_cmd(cmd):
     d = load_proxies()
     if not d["enabled_cmds"].get(cmd): return None
     if not d["proxies"]: return None
@@ -77,9 +76,8 @@ session = requests.Session()
 headers = {"User-Agent": "Mozilla/5.0"}
 
 # ========= CHECK =========
-def check(username):
+def check(username, proxy):
     url = f"https://www.instagram.com/{username}/"
-    proxy = get_proxy("chk")
 
     try:
         res = session.get(url, headers=headers, timeout=10, proxies=proxy)
@@ -138,10 +136,20 @@ async def chk(u, c):
         return
 
     users=list(set(users))
-    await u.message.reply_text(f"Checking {len(users)}...")
+
+    # 🔥 KEY FIX: ONE PROXY PER REQUEST
+    proxy = get_random_proxy_for_cmd("chk")
+
+    log(f"=== NEW /chk REQUEST ===")
+    log(f"Using proxy: {proxy}")
+
+    await u.message.reply_text(f"Checking {len(users)} users...")
+
+    def worker(user):
+        return check(user, proxy)
 
     with ThreadPoolExecutor(max_workers=THREADS) as ex:
-        res=list(ex.map(check, users))
+        res=list(ex.map(worker, users))
 
     await u.message.reply_text("\n".join(res))
 
@@ -269,17 +277,14 @@ async def proxy_input(u,c):
 def main():
     app=ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # basic
     app.add_handler(CommandHandler("start",start))
     app.add_handler(CommandHandler("cmds",cmds))
     app.add_handler(CommandHandler("help",help_cmd))
     app.add_handler(CommandHandler("id",id_cmd))
     app.add_handler(CommandHandler("ping",ping))
 
-    # pro
     app.add_handler(CommandHandler("chk",chk))
 
-    # admin
     app.add_handler(CommandHandler("approve",approve))
     app.add_handler(CommandHandler("revoke",revoke))
     app.add_handler(CommandHandler("ban",ban))
