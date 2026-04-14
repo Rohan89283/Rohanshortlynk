@@ -3,7 +3,7 @@ import requests
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# 🔐 ENV VARIABLES (from Railway)
+# 🔐 ENV
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 BOT_ADMIN = int(os.getenv("BOT_ADMIN"))
 
@@ -11,7 +11,7 @@ headers = {
     "User-Agent": "Mozilla/5.0"
 }
 
-# 🔥 YOUR ORIGINAL LOGIC (converted to function)
+# 🔥 IMPROVED CHECK FUNCTION
 def check_username(username):
     url = f"https://www.instagram.com/{username}/"
 
@@ -19,52 +19,109 @@ def check_username(username):
         res = requests.get(url, headers=headers, timeout=10)
         html = res.text
 
-        if f'rel="alternate" href="https://www.instagram.com/{username}/"' in html:
+        if f'"username":"{username}"' in html:
             return "EXISTS"
+        elif "Page Not Found" in html:
+            return "NOT_EXIST"
         else:
             return "NOT_EXIST"
 
-    except:
+    except Exception as e:
+        print(f"ERROR checking {username}: {e}")
         return "ERROR"
+
+
+# 🔥 EXTRACT USERNAMES FROM TEXT
+def extract_usernames(text):
+    lines = text.splitlines()
+    users = []
+
+    for line in lines:
+        line = line.strip().replace("@", "")
+        if line:
+            users.append(line)
+
+    return users
 
 
 # 🚀 /chk COMMAND
 async def chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
-    # 🔒 Only admin allowed (for now)
+    # 🔒 admin only
     if user_id != BOT_ADMIN:
         await update.message.reply_text("❌ You are not authorized.")
         return
 
-    # ❗ No username provided
-    if len(context.args) == 0:
-        await update.message.reply_text("⚠️ Usage:\n/chk username")
+    usernames = []
+
+    # ✅ Case 1: command args (/chk user1 user2)
+    if context.args:
+        usernames.extend(context.args)
+
+    # ✅ Case 2: multiline message
+    if update.message.text:
+        text = update.message.text.replace("/chk", "").strip()
+        if text:
+            usernames.extend(extract_usernames(text))
+
+    # ✅ Case 3: reply to file
+    if update.message.reply_to_message:
+        doc = update.message.reply_to_message.document
+
+        if doc and doc.file_name.endswith(".txt"):
+            file = await context.bot.get_file(doc.file_id)
+            content = await file.download_as_bytearray()
+            file_text = content.decode("utf-8")
+
+            usernames.extend(extract_usernames(file_text))
+
+    # ❗ no usernames found
+    if not usernames:
+        await update.message.reply_text("⚠️ Send usernames or reply to .txt file")
         return
 
-    username = context.args[0].strip().replace("@", "")
+    # remove duplicates
+    usernames = list(set(usernames))
 
-    await update.message.reply_text(f"🔍 Checking `{username}`...", parse_mode="Markdown")
+    await update.message.reply_text(f"🔍 Checking {len(usernames)} usernames...")
 
-    result = check_username(username)
+    results = []
 
-    if result == "EXISTS":
-        msg = f"@{username} → ✅ EXISTS"
-    elif result == "NOT_EXIST":
-        msg = f"@{username} → ❌ NOT EXIST"
-    else:
-        msg = f"@{username} → ⚠️ ERROR"
+    for username in usernames:
+        username = username.strip().replace("@", "")
 
-    await update.message.reply_text(msg)
+        result = check_username(username)
+
+        if result == "EXISTS":
+            msg = f"@{username} → ✅"
+        elif result == "NOT_EXIST":
+            msg = f"@{username} → ❌"
+        else:
+            msg = f"@{username} → ⚠️"
+
+        print(msg)  # 👈 Railway log
+        results.append(msg)
+
+    # split long messages (telegram limit)
+    chunk = ""
+    for r in results:
+        if len(chunk) + len(r) + 1 > 4000:
+            await update.message.reply_text(chunk)
+            chunk = ""
+        chunk += r + "\n"
+
+    if chunk:
+        await update.message.reply_text(chunk)
 
 
-# 🚀 MAIN BOT
+# 🚀 MAIN
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("chk", chk))
 
-    print("🤖 Bot is running...")
+    print("🤖 Bot running...")
 
     app.run_polling()
 
