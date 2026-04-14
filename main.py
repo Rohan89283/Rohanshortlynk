@@ -1,5 +1,6 @@
 import os
 import requests
+import time
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
@@ -7,31 +8,36 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 BOT_ADMIN = int(os.getenv("BOT_ADMIN"))
 
+# 🔥 SESSION (important for consistency)
+session = requests.Session()
+
 headers = {
-    "User-Agent": "Mozilla/5.0"
+    "User-Agent": "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Connection": "keep-alive"
 }
 
-# 🔥 IMPROVED CHECK FUNCTION
+# 🔥 EXACT SAME LOGIC (FIXED REQUEST)
 def check_username(username):
     url = f"https://www.instagram.com/{username}/"
 
     try:
-        res = requests.get(url, headers=headers, timeout=10)
+        res = session.get(url, headers=headers, timeout=10)
         html = res.text
 
-        if f'"username":"{username}"' in html:
+        # 🔥 YOUR ORIGINAL CHECK
+        if f'rel="alternate" href="https://www.instagram.com/{username}/"' in html:
             return "EXISTS"
-        elif "Page Not Found" in html:
-            return "NOT_EXIST"
         else:
             return "NOT_EXIST"
 
     except Exception as e:
-        print(f"ERROR checking {username}: {e}")
+        print(f"ERROR {username}: {e}")
         return "ERROR"
 
 
-# 🔥 EXTRACT USERNAMES FROM TEXT
+# 🔥 EXTRACT USERNAMES
 def extract_usernames(text):
     lines = text.splitlines()
     users = []
@@ -55,17 +61,17 @@ async def chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     usernames = []
 
-    # ✅ Case 1: command args (/chk user1 user2)
+    # ✅ args
     if context.args:
         usernames.extend(context.args)
 
-    # ✅ Case 2: multiline message
+    # ✅ multiline
     if update.message.text:
         text = update.message.text.replace("/chk", "").strip()
         if text:
             usernames.extend(extract_usernames(text))
 
-    # ✅ Case 3: reply to file
+    # ✅ txt file
     if update.message.reply_to_message:
         doc = update.message.reply_to_message.document
 
@@ -76,12 +82,10 @@ async def chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             usernames.extend(extract_usernames(file_text))
 
-    # ❗ no usernames found
     if not usernames:
         await update.message.reply_text("⚠️ Send usernames or reply to .txt file")
         return
 
-    # remove duplicates
     usernames = list(set(usernames))
 
     await update.message.reply_text(f"🔍 Checking {len(usernames)} usernames...")
@@ -100,10 +104,12 @@ async def chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             msg = f"@{username} → ⚠️"
 
-        print(msg)  # 👈 Railway log
+        print(msg)  # Railway logs
         results.append(msg)
 
-    # split long messages (telegram limit)
+        time.sleep(0.3)  # 🔥 anti-ban / more accurate
+
+    # split messages
     chunk = ""
     for r in results:
         if len(chunk) + len(r) + 1 > 4000:
