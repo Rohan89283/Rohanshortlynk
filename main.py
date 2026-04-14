@@ -8,7 +8,6 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 BOT_ADMIN = int(os.getenv("BOT_ADMIN"))
 
-# 🔥 SETTINGS (same style)
 THREADS = 10
 
 session = requests.Session()
@@ -17,68 +16,71 @@ headers = {
     "User-Agent": "Mozilla/5.0"
 }
 
-# 🔥 SAME LOGIC (WITH DEBUG LOGS)
+LOG_FILE = "bot.log"
+
+
+# 🔥 LOG FUNCTION
+def write_log(text):
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(text + "\n")
+
+
+# 🔥 SAME CHECK (WITH LOGGING)
 def check(username):
     url = f"https://www.instagram.com/{username}/"
 
     try:
         res = session.get(url, headers=headers, timeout=10)
-
         html = res.text
 
-        # 🔍 DEBUG LOGS
-        print(f"\n--- CHECKING: {username} ---")
-        print(f"STATUS: {res.status_code}")
-        print(f"LENGTH: {len(html)}")
+        log_text = f"\n--- CHECKING: {username} ---\n"
+        log_text += f"STATUS: {res.status_code}\n"
+        log_text += f"LENGTH: {len(html)}\n"
+        log_text += html[:200].replace("\n", " ") + "\n"
 
-        # show small part of html (important)
-        print(html[:200].replace("\n", " "))
-
-        # 🔥 YOUR EXACT LOGIC
         if f'rel="alternate" href="https://www.instagram.com/{username}/"' in html:
             result = f"{username} → ✅ EXISTS"
         else:
             result = f"{username} → ❌ NOT EXIST"
 
+        log_text += result
+
     except Exception as e:
         result = f"{username} → ⚠️ ERROR"
-        print(f"ERROR: {e}")
+        log_text = f"ERROR {username}: {e}"
 
-    print(result)
+    print(log_text)
+    write_log(log_text)
+
     return result
 
 
-# 🔥 EXTRACT USERNAMES
+# 🔥 USERNAME PARSER
 def extract_usernames(text):
     users = []
     for line in text.splitlines():
         line = line.strip().replace("@", "")
         if line:
-            users.extend(line.split())  # supports space separated
+            users.extend(line.split())
     return users
 
 
-# 🚀 /chk COMMAND
+# 🚀 /chk
 async def chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-
-    if user_id != BOT_ADMIN:
+    if update.effective_user.id != BOT_ADMIN:
         await update.message.reply_text("❌ Not allowed")
         return
 
     usernames = []
 
-    # ✅ args
     if context.args:
         usernames.extend(context.args)
 
-    # ✅ multiline / message
     if update.message.text:
         text = update.message.text.replace("/chk", "").strip()
         if text:
             usernames.extend(extract_usernames(text))
 
-    # ✅ txt file
     if update.message.reply_to_message:
         doc = update.message.reply_to_message.document
         if doc and doc.file_name.endswith(".txt"):
@@ -96,12 +98,10 @@ async def chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     results = []
 
-    # 🔥 THREADING LIKE YOUR SCRIPT
     with ThreadPoolExecutor(max_workers=THREADS) as executor:
         outputs = list(executor.map(check, usernames))
         results.extend(outputs)
 
-    # 🔥 SEND RESULT (SAFE SPLIT)
     chunk = ""
     for r in results:
         if len(chunk) + len(r) + 1 > 4000:
@@ -113,11 +113,34 @@ async def chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(chunk)
 
 
+# 🚀 /log
+async def log_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != BOT_ADMIN:
+        await update.message.reply_text("❌ Not allowed")
+        return
+
+    if not os.path.exists(LOG_FILE):
+        await update.message.reply_text("📭 No logs yet.")
+        return
+
+    # read last lines
+    with open(LOG_FILE, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    last_logs = "".join(lines[-50:])  # last 50 lines
+
+    if len(last_logs) > 4000:
+        last_logs = last_logs[-4000:]
+
+    await update.message.reply_text(f"📜 Last Logs:\n\n{last_logs}")
+
+
 # 🚀 MAIN
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("chk", chk))
+    app.add_handler(CommandHandler("log", log_cmd))
 
     print("🤖 Bot started...")
 
