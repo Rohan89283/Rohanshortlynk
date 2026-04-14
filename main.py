@@ -42,13 +42,18 @@ BOT_ADMIN = int(BOT_ADMIN)
 # SETTINGS
 # =========================================================
 THREADS = 10
+SAFE_THREADS_NO_PROXY = 3
+REQUEST_TIMEOUT = 10
+RETRY_DELAY = 1.2
 START_TIME = time.time()
 
 DATA_FILE = "users.json"
 LOG_FILE = "bot.log"
 PROXY_FILE = "proxies.json"
 
-session = requests.Session()
+# keep a session only for non-checker utility requests
+utility_session = requests.Session()
+
 headers = {
     "User-Agent": "Mozilla/5.0"
 }
@@ -199,31 +204,120 @@ def proxy_status_text() -> str:
 
 # =========================================================
 # CORE CHECK
-# EXACT LOGIC KEPT FROM USER SCRIPT
 # =========================================================
-def check_instagram_username(username: str, proxy: dict | None) -> str:
-    url = f"https://www.instagram.com/{username}/"
+def classify_instagram_response(username: str, status_code: int, html: str) -> tuple[str, str]:
+    """
+    Returns (status_key, result_text)
+    status_key: EXISTS / NOT_EXIST / ERROR
+    """
 
-    try:
-        res = session.get(url, headers=headers, timeout=10, proxies=proxy)
-        html = res.text
+    html = html or ""
 
-        preview = html[:180].replace("\n", " ").replace("\r", " ")
-        log(f"CHECK username={username} status={res.status_code} html_len={len(html)} proxy={proxy}")
-        log(f"HTML_PREVIEW username={username} preview={preview}")
+    # Rate limit / block / empty should NEVER become NOT EXIST
+    if status_code == 429:
+        return "ERROR", f"{username} → ⚠️ ERROR"
+    if status_code in (403, 500, 502, 503, 504):
+        return "ERROR", f"{username} → ⚠️ ERROR"
+    if not html.strip():
+        return "ERROR", f"{username} → ⚠️ ERROR"
 
-        # EXACT SAME LOGIC
-        if f'rel="alternate" href="https://www.instagram.com/{username}/"' in html:
-            result = f"{username} → ✅ EXISTS"
-        else:
-            result = f"{username} → ❌ NOT EXIST"
+    # EXACT SAME MOBILE LOGIC FIRST
+    if f'rel="alternate" href="https://www.instagram.com/{username}/"' in html:
+        return "EXISTS", f"{username} → ✅ EXISTS"
 
-    except Exception as e:
-        result = f"{username} → ⚠️ ERROR"
-        log(f"ERROR username={username} err={e}")
+    # Safe negative checks
+    not_found_markers = [
+        "Sorry, this page isn't available.",
+        "The link you followed may be broken",
+        "Page isn't available",
+        "Page Not Found",
+    ]
+    if status_code == 404 or any(marker in html for marker in not_found_markers):
+        return "NOT_EXIST", f"{username} → ❌ NOT EXIST"
 
+    # If we got a weird login/challenge/throttle page without the exact marker,
+    # do not force NOT EXIST because that caused your false results.
+    suspicious_markers = [
+        "Please wait a few minutes before you try again",
+        "/accounts/login/",
+        "challenge",
+        "checkpoint",
+        "loginForm",
+        '"viewer":null',
+    ]
+    if any(marker in html for marker in suspicious_markers):
+        return "ERROR", f"{username} → ⚠️ ERROR"
+
+    # fallback: preserve your original final behavior only on a normal 200 page
+    if status_code == 200:
+        return "NOT_EXIST", f"{username} → ❌ NOT EXIST"
+
+    return "ERROR", f"{username} → ⚠️ ERROR"
+
+def fetch_instagram_page(username: str, proxy: dict | None) -> tuple[int, str]:
+    """
+    Important: use requests.get directly to stay closer to your Termux/mobile script.
+    No shared session for threaded checks.
+    """
+    res = requests.get(
+        f"https://www.instagram.com/{username}/",
+        headers=headers,
+        timeout=REQUEST_TIMEOUT,
+        proxies=proxy,
+    )
+    return res.status_code, res.text
+
+def check_instagram_username(username: str, proxy: dict | None) -> dict:
+    """
+    Returns:
+    {
+      "username": str,
+      "status": "EXISTS"|"NOT_EXIST"|"ERROR",
+      "result": str
+    }
+    """
+    for attempt in range(2):
+        try:
+            status_code, html = fetch_instagram_page(username, proxy)
+            preview = (html[:180] if html else "").replace("\n", " ").replace("\r", " ")
+            log(f"CHECK username={username} status={status_code} html_len={len(html)} proxy={proxy} attempt={attempt+1}")
+            log(f"HTML_PREVIEW username={username} preview={preview}")
+
+            status_key, result = classify_instagram_response(username, status_code, html)
+
+            # retry once on temporary failures
+            if status_key == "ERROR" and attempt == 0:
+                time.sleep(RETRY_DELAY)
+                continue
+
+            log(f"RESULT {result}")
+            return {
+                "username": username,
+                "status": status_key,
+                "result": result,
+            }
+
+        except Exception as e:
+            log(f"ERROR username={username} err={e} attempt={attempt+1}")
+            if attempt == 0:
+                time.sleep(RETRY_DELAY)
+                continue
+
+            result = f"{username} → ⚠️ ERROR"
+            log(f"RESULT {result}")
+            return {
+                "username": username,
+                "status": "ERROR",
+                "result": result,
+            }
+
+    result = f"{username} → ⚠️ ERROR"
     log(f"RESULT {result}")
-    return result
+    return {
+        "username": username,
+        "status": "ERROR",
+        "result": result,
+    }
 
 # =========================================================
 # UI HELPERS
@@ -307,6 +401,7 @@ def build_help_text(user_id: int) -> str:
         "• Duplicates are removed automatically\n"
         "• One /chk request uses one proxy only\n"
         "• Next /chk may use a different proxy\n"
+        "• 429 / blocked responses are treated as error, not fake not-exist\n"
     )
 
     if is_admin(user_id):
@@ -477,7 +572,12 @@ async def chk_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     proxy = get_proxy_for_request("chk")
     proxy_status = "ON | LIVE" if proxy else "OFF"
-    log(f"NEW_CHK_REQUEST user_id={user.id} usernames={len(usernames)} proxy={proxy}")
+    worker_threads = THREADS if proxy else SAFE_THREADS_NO_PROXY
+
+    log(
+        f"NEW_CHK_REQUEST user_id={user.id} usernames={len(usernames)} "
+        f"proxy={proxy} worker_threads={worker_threads}"
+    )
 
     progress_message = await update.message.reply_text(
         build_chk_status_text(
@@ -499,15 +599,18 @@ async def chk_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     error_count = 0
     exists_list: list[str] = []
 
-    def worker(username: str) -> str:
+    def worker(username: str) -> dict:
         return check_instagram_username(username, proxy)
 
-    with ThreadPoolExecutor(max_workers=THREADS) as executor:
-        for i, result in enumerate(executor.map(worker, usernames), start=1):
-            if "✅ EXISTS" in result:
+    with ThreadPoolExecutor(max_workers=worker_threads) as executor:
+        for i, item in enumerate(executor.map(worker, usernames), start=1):
+            status = item["status"]
+            username = item["username"]
+
+            if status == "EXISTS":
                 exist_count += 1
-                exists_list.append(result.split(" → ")[0])
-            elif "❌ NOT EXIST" in result:
+                exists_list.append(username)
+            elif status == "NOT_EXIST":
                 not_exist_count += 1
             else:
                 error_count += 1
