@@ -51,9 +51,6 @@ DATA_FILE = "users.json"
 LOG_FILE = "bot.log"
 PROXY_FILE = "proxies.json"
 
-# keep a session only for non-checker utility requests
-utility_session = requests.Session()
-
 headers = {
     "User-Agent": "Mozilla/5.0"
 }
@@ -205,15 +202,28 @@ def proxy_status_text() -> str:
 # =========================================================
 # CORE CHECK
 # =========================================================
+def fetch_instagram_page(username: str, proxy: dict | None) -> tuple[int, str]:
+    """
+    Use plain requests.get so behavior stays closer to your mobile script.
+    """
+    res = requests.get(
+        f"https://www.instagram.com/{username}/",
+        headers=headers,
+        timeout=REQUEST_TIMEOUT,
+        proxies=proxy,
+    )
+    return res.status_code, res.text
+
 def classify_instagram_response(username: str, status_code: int, html: str) -> tuple[str, str]:
     """
-    Returns (status_key, result_text)
-    status_key: EXISTS / NOT_EXIST / ERROR
+    Returns:
+      ("EXISTS"|"NOT_EXIST"|"ERROR", result_text)
     """
 
     html = html or ""
+    html_len = len(html)
 
-    # Rate limit / block / empty should NEVER become NOT EXIST
+    # hard errors / throttling
     if status_code == 429:
         return "ERROR", f"{username} → ⚠️ ERROR"
     if status_code in (403, 500, 502, 503, 504):
@@ -221,11 +231,11 @@ def classify_instagram_response(username: str, status_code: int, html: str) -> t
     if not html.strip():
         return "ERROR", f"{username} → ⚠️ ERROR"
 
-    # EXACT SAME MOBILE LOGIC FIRST
+    # exact same mobile logic first
     if f'rel="alternate" href="https://www.instagram.com/{username}/"' in html:
         return "EXISTS", f"{username} → ✅ EXISTS"
 
-    # Safe negative checks
+    # explicit not-found markers
     not_found_markers = [
         "Sorry, this page isn't available.",
         "The link you followed may be broken",
@@ -235,8 +245,20 @@ def classify_instagram_response(username: str, status_code: int, html: str) -> t
     if status_code == 404 or any(marker in html for marker in not_found_markers):
         return "NOT_EXIST", f"{username} → ❌ NOT EXIST"
 
-    # If we got a weird login/challenge/throttle page without the exact marker,
-    # do not force NOT EXIST because that caused your false results.
+    # response-shape fallback based on your Railway logs
+    # exists pages are repeatedly ~930k-945k
+    if 900000 <= html_len <= 970000:
+        return "EXISTS", f"{username} → ✅ EXISTS"
+
+    # not-exist pages are repeatedly ~830k-840k
+    if 780000 <= html_len <= 880000:
+        return "NOT_EXIST", f"{username} → ❌ NOT EXIST"
+
+    # older proxy runs also showed not-exist around ~606k-612k
+    if 580000 <= html_len <= 700000:
+        return "NOT_EXIST", f"{username} → ❌ NOT EXIST"
+
+    # suspicious pages should stay error
     suspicious_markers = [
         "Please wait a few minutes before you try again",
         "/accounts/login/",
@@ -248,24 +270,11 @@ def classify_instagram_response(username: str, status_code: int, html: str) -> t
     if any(marker in html for marker in suspicious_markers):
         return "ERROR", f"{username} → ⚠️ ERROR"
 
-    # fallback: preserve your original final behavior only on a normal 200 page
+    # final safe fallback
     if status_code == 200:
         return "NOT_EXIST", f"{username} → ❌ NOT EXIST"
 
     return "ERROR", f"{username} → ⚠️ ERROR"
-
-def fetch_instagram_page(username: str, proxy: dict | None) -> tuple[int, str]:
-    """
-    Important: use requests.get directly to stay closer to your Termux/mobile script.
-    No shared session for threaded checks.
-    """
-    res = requests.get(
-        f"https://www.instagram.com/{username}/",
-        headers=headers,
-        timeout=REQUEST_TIMEOUT,
-        proxies=proxy,
-    )
-    return res.status_code, res.text
 
 def check_instagram_username(username: str, proxy: dict | None) -> dict:
     """
@@ -285,7 +294,6 @@ def check_instagram_username(username: str, proxy: dict | None) -> dict:
 
             status_key, result = classify_instagram_response(username, status_code, html)
 
-            # retry once on temporary failures
             if status_key == "ERROR" and attempt == 0:
                 time.sleep(RETRY_DELAY)
                 continue
@@ -401,7 +409,7 @@ def build_help_text(user_id: int) -> str:
         "• Duplicates are removed automatically\n"
         "• One /chk request uses one proxy only\n"
         "• Next /chk may use a different proxy\n"
-        "• 429 / blocked responses are treated as error, not fake not-exist\n"
+        "• 429 stays error, not fake not-exist\n"
     )
 
     if is_admin(user_id):
