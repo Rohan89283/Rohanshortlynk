@@ -203,9 +203,6 @@ def proxy_status_text() -> str:
 # CORE CHECK
 # =========================================================
 def fetch_instagram_page(username: str, proxy: dict | None) -> tuple[int, str]:
-    """
-    Use plain requests.get so behavior stays closer to your mobile script.
-    """
     res = requests.get(
         f"https://www.instagram.com/{username}/",
         headers=headers,
@@ -215,15 +212,10 @@ def fetch_instagram_page(username: str, proxy: dict | None) -> tuple[int, str]:
     return res.status_code, res.text
 
 def classify_instagram_response(username: str, status_code: int, html: str) -> tuple[str, str]:
-    """
-    Returns:
-      ("EXISTS"|"NOT_EXIST"|"ERROR", result_text)
-    """
-
     html = html or ""
     html_len = len(html)
 
-    # hard errors / throttling
+    # hard errors
     if status_code == 429:
         return "ERROR", f"{username} → ⚠️ ERROR"
     if status_code in (403, 500, 502, 503, 504):
@@ -245,20 +237,20 @@ def classify_instagram_response(username: str, status_code: int, html: str) -> t
     if status_code == 404 or any(marker in html for marker in not_found_markers):
         return "NOT_EXIST", f"{username} → ❌ NOT EXIST"
 
-    # response-shape fallback based on your Railway logs
-    # exists pages are repeatedly ~930k-945k
+    # size-based fallback from your own Railway logs
+    # stable exists zone
     if 900000 <= html_len <= 970000:
         return "EXISTS", f"{username} → ✅ EXISTS"
 
-    # not-exist pages are repeatedly ~830k-840k
+    # stable not-exist zone
     if 780000 <= html_len <= 880000:
         return "NOT_EXIST", f"{username} → ❌ NOT EXIST"
 
-    # older proxy runs also showed not-exist around ~606k-612k
+    # unstable compressed / drift zone seen in your latest logs
+    # these were causing false NOT EXIST
     if 580000 <= html_len <= 700000:
-        return "NOT_EXIST", f"{username} → ❌ NOT EXIST"
+        return "ERROR", f"{username} → ⚠️ ERROR"
 
-    # suspicious pages should stay error
     suspicious_markers = [
         "Please wait a few minutes before you try again",
         "/accounts/login/",
@@ -270,21 +262,13 @@ def classify_instagram_response(username: str, status_code: int, html: str) -> t
     if any(marker in html for marker in suspicious_markers):
         return "ERROR", f"{username} → ⚠️ ERROR"
 
-    # final safe fallback
+    # safer fallback
     if status_code == 200:
-        return "NOT_EXIST", f"{username} → ❌ NOT EXIST"
+        return "ERROR", f"{username} → ⚠️ ERROR"
 
     return "ERROR", f"{username} → ⚠️ ERROR"
 
 def check_instagram_username(username: str, proxy: dict | None) -> dict:
-    """
-    Returns:
-    {
-      "username": str,
-      "status": "EXISTS"|"NOT_EXIST"|"ERROR",
-      "result": str
-    }
-    """
     for attempt in range(2):
         try:
             status_code, html = fetch_instagram_page(username, proxy)
@@ -410,6 +394,7 @@ def build_help_text(user_id: int) -> str:
         "• One /chk request uses one proxy only\n"
         "• Next /chk may use a different proxy\n"
         "• 429 stays error, not fake not-exist\n"
+        "• unstable 600k HTML pages stay error now\n"
     )
 
     if is_admin(user_id):
