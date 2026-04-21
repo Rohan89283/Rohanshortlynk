@@ -1,4 +1,3 @@
-# Bot service — lightweight, no Chrome needed (automation runs in worker service)
 FROM python:3.11-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -11,10 +10,13 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY requirements.txt worker/requirements.txt ./
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt -r worker/requirements.txt && \
+    playwright install --with-deps chromium
 
 COPY . /app
 
-CMD ["python", "main.py"]
+RUN chmod +x /app/start.sh
+
+CMD ["/app/start.sh"]
