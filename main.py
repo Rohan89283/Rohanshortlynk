@@ -1187,13 +1187,14 @@ WORKER_KEY = os.environ.get("WORKER_KEY", "")
 
 async def dispatch_killer(cmd: str, card: str, chat_id: int, message_id: int):
     """Send a killer job to the Playwright worker API. Returns True on success, str error on failure."""
-    if not WORKER_URL:
-        return "WORKER_URL not configured"
-    key = os.environ.get("WORKER_KEY", WORKER_KEY)
+    url = os.environ.get("WORKER_URL", "").rstrip("/")
+    key = os.environ.get("WORKER_KEY", "")
+    if not url:
+        return "WORKER_URL not configured — add it to Railway environment variables"
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(
-                f"{WORKER_URL}/job",
+                f"{url}/job",
                 json={"cmd": cmd, "card": card, "chat_id": chat_id, "message_id": message_id},
                 headers={"X-Worker-Key": key},
             )
@@ -1205,7 +1206,7 @@ async def dispatch_killer(cmd: str, card: str, chat_id: int, message_id: int):
                 return f"Worker error {resp.status_code}: {resp.text[:100]}"
             return True
     except httpx.ConnectError:
-        return f"Cannot connect to worker at {WORKER_URL}"
+        return f"Cannot connect to worker at {url}"
     except httpx.TimeoutException:
         return "Worker request timed out"
     except Exception as e:
