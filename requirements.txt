@@ -6,6 +6,7 @@ fake_useragent
 names
 psutil
 requests
+httpx
 faker
 pyrogram
 TgCrypto
