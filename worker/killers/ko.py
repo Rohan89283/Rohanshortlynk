@@ -21,7 +21,7 @@ async def run(ctx: BrowserContext, card_input: str, chat_id: int, message_id: in
         bin_task = asyncio.create_task(get_bin_info(cc[:6]))
 
         await tg_edit(chat_id, message_id, "⚡ Processing (fast mode)...")
-        await page.goto("https://src.visa.com/login", wait_until="commit", timeout=15000)
+        await page.goto("https://src.visa.com/login", wait_until="domcontentloaded", timeout=15000)
 
         try:
             await page.wait_for_selector("a.wscrOk", timeout=2000)

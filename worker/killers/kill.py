@@ -20,7 +20,7 @@ async def run(ctx: BrowserContext, card_input: str, chat_id: int, message_id: in
         bin_task = asyncio.create_task(get_bin_info(cc[:6]))
 
         await tg_edit(chat_id, message_id, f"💳 `{short_card}`\n🔁 Starting VISA kill automation...")
-        await page.goto("https://secure.checkout.visa.com/createAccount", wait_until="commit", timeout=20000)
+        await page.goto("https://secure.checkout.visa.com/createAccount", wait_until="domcontentloaded", timeout=20000)
 
         # Account creation form
         await page.wait_for_selector("#firstName", state="attached", timeout=TIMEOUT)
