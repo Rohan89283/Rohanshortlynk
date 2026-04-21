@@ -1185,23 +1185,31 @@ def killer_cleanup_driver(driver):
 WORKER_URL = os.environ.get("WORKER_URL", "").rstrip("/")
 WORKER_KEY = os.environ.get("WORKER_KEY", "")
 
-async def dispatch_killer(cmd: str, card: str, chat_id: int, message_id: int) -> bool:
-    """Send a killer job to the Playwright worker API. Returns False if worker is busy."""
+async def dispatch_killer(cmd: str, card: str, chat_id: int, message_id: int):
+    """Send a killer job to the Playwright worker API. Returns True on success, str error on failure."""
     if not WORKER_URL:
-        return False
+        return "WORKER_URL not configured"
+    key = os.environ.get("WORKER_KEY", WORKER_KEY)
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(
                 f"{WORKER_URL}/job",
                 json={"cmd": cmd, "card": card, "chat_id": chat_id, "message_id": message_id},
-                headers={"X-Worker-Key": WORKER_KEY},
+                headers={"X-Worker-Key": key},
             )
+            if resp.status_code == 401:
+                return "Worker auth failed (wrong WORKER_KEY)"
             if resp.status_code == 503:
-                return False
-            resp.raise_for_status()
+                return "All workers busy — try again shortly"
+            if resp.status_code != 200:
+                return f"Worker error {resp.status_code}: {resp.text[:100]}"
             return True
-    except Exception:
-        return False
+    except httpx.ConnectError:
+        return f"Cannot connect to worker at {WORKER_URL}"
+    except httpx.TimeoutException:
+        return "Worker request timed out"
+    except Exception as e:
+        return f"Worker error: {e}"
 
 # ==== 2.3 Browser Command Health Tracking ====
 BROWSER_CMDS = ("kill", "kd", "ko", "zz", "dd", "st", "bt", "chk")
@@ -5153,8 +5161,8 @@ async def kill_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = await update.message.reply_text("⏳ Killing automation...", parse_mode="Markdown", reply_to_message_id=update.message.message_id)
     ok = await dispatch_killer("kill", card_input, update.effective_chat.id, msg.message_id)
-    if not ok:
-        await msg.edit_text("⚠️ All workers busy, please try again in a moment.")
+    if ok is not True:
+        await msg.edit_text(f"⚠️ {ok}")
         return
     record_cmd_success("kill")
 
@@ -5355,8 +5363,8 @@ async def kd_cmd(update, context):
 
     msg = await update.message.reply_text(f"💳 `{card_input}`", parse_mode="Markdown", reply_to_message_id=update.message.message_id)
     ok = await dispatch_killer("kd", card_input, update.effective_chat.id, msg.message_id)
-    if not ok:
-        await msg.edit_text("⚠️ All workers busy, please try again in a moment.")
+    if ok is not True:
+        await msg.edit_text(f"⚠️ {ok}")
 
 # ==== 7.5 /ko Command (FINAL - FAST + STABLE VERSION) ==== #
 def run_ko_process(card_input, update_dict):
@@ -5552,8 +5560,8 @@ async def ko_cmd(update, context):
 
     msg = await update.message.reply_text(f"💳 `{card_input}`", parse_mode="Markdown", reply_to_message_id=update.message.message_id)
     ok = await dispatch_killer("ko", card_input, update.effective_chat.id, msg.message_id)
-    if not ok:
-        await msg.edit_text("⚠️ All workers busy, please try again in a moment.")
+    if ok is not True:
+        await msg.edit_text(f"⚠️ {ok}")
 
 # ==== 7.5 /zz Command (REWRITTEN - DD CORE + FAST OPTIMIZED) ==== #
 def run_zz_process(card_input, update_dict):
@@ -5746,8 +5754,8 @@ async def zz_cmd(update, context):
 
     msg = await update.message.reply_text("⚙️ Processing your request...", reply_to_message_id=update.message.message_id)
     ok = await dispatch_killer("zz", card_input, update.effective_chat.id, msg.message_id)
-    if not ok:
-        await msg.edit_text("⚠️ All workers busy, please try again in a moment.")
+    if ok is not True:
+        await msg.edit_text(f"⚠️ {ok}")
 
 # ==== 7.6 /dd Command (FINAL - FAST + FIXED FLOW) ==== #
 def run_dd_process(card_input, update_dict):
@@ -5942,8 +5950,8 @@ async def dd_cmd(update, context):
 
     msg = await update.message.reply_text("⚡ Processing (ultra-fast)...", reply_to_message_id=update.message.message_id)
     ok = await dispatch_killer("dd", card_input, update.effective_chat.id, msg.message_id)
-    if not ok:
-        await msg.edit_text("⚠️ All workers busy, please try again in a moment.")
+    if ok is not True:
+        await msg.edit_text(f"⚠️ {ok}")
 
 # ==== 8. STRIPE AUTH V1 (/st) — Single Only (batch removed) ==== #
 def extract_all_card_inputs(raw_text: str):
