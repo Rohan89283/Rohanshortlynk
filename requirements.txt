@@ -8,3 +8,5 @@ httpx~=0.25.0
 faker
 pyrogram
 TgCrypto
+selenium
+webdriver-manager
