@@ -922,7 +922,7 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-BOT_ADMIN_ID = _env_int("BOT_ADMIN_ID", 935200729)
+BOT_ADMIN_ID = _env_int("BOT_ADMIN_ID", 0) or _env_int("BOT_ADMIN", 0) or 935200729
 
 nest_asyncio.apply()
 start_time = datetime.now()
@@ -1132,7 +1132,7 @@ def killer_edit_message(update_dict: dict, text: str):
 def killer_admin_report(cmd_name: str, trace: str, driver=None):
     """Send error report to admin"""
     BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
-    BOT_ADMIN_ID = int(os.environ.get("BOT_ADMIN_ID", "935200729"))
+    BOT_ADMIN_ID = int(os.environ.get("BOT_ADMIN_ID") or os.environ.get("BOT_ADMIN") or "935200729")
     
     sent = False
     if driver:

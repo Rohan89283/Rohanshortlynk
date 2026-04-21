@@ -4,7 +4,7 @@ import string
 import httpx
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
-BOT_ADMIN_ID = int(os.environ.get("BOT_ADMIN_ID", "935200729"))
+BOT_ADMIN_ID = int(os.environ.get("BOT_ADMIN_ID") or os.environ.get("BOT_ADMIN") or "935200729")
 
 _FAKE_FIRST_NAMES = ["James", "John", "Robert", "Michael", "David", "William", "Richard", "Joseph", "Thomas", "Charles"]
 _FAKE_LAST_NAMES = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez"]
