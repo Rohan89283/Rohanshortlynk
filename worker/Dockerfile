@@ -11,8 +11,11 @@ WORKDIR /app
 
 COPY worker/requirements.txt /app/requirements.txt
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt && \
-    playwright install chromium --with-deps
+    pip install --no-cache-dir -r requirements.txt
+
+RUN apt-get update && \
+    playwright install --with-deps chromium && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY worker/ /app/worker/
 
