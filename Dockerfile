@@ -14,9 +14,10 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY requirements.txt worker/requirements.txt ./
+COPY requirements.txt ./requirements.txt
+COPY worker/requirements.txt ./worker-requirements.txt
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt -r worker/requirements.txt
+    pip install --no-cache-dir -r requirements.txt -r worker-requirements.txt
 
 RUN apt-get update && \
     playwright install --with-deps chromium && \
